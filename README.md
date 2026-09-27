@@ -151,8 +151,25 @@ score = 专业分 + 城市分 × 1.2
 
 之后每天 02:00 自动更新，也可以在 Actions 页面点 **Run workflow** 手动触发。
 
-可选的码上架同步发布：在 `Settings → Secrets and variables → Actions` 添加名为
-`MASHANGJIA_LOGIN_TOKEN` 的 Secret 即可；**未配置时该步骤会自动跳过**，不影响主流程。
+### 发布到码上架（固定地址）
+
+已在 `config/publish.json` 固定目标站点：
+
+```jsonc
+{ "site": "ahut-recruitment-calendar" }
+```
+
+```bash
+python scripts/publish.py                    # 定向更新该站点（推荐）
+python scripts/publish.py --site <slug|id>   # 临时换站点
+```
+
+> ⚠️ **绑定自定义域名后务必用「按站点更新」**。CLI 的 `deploy <目录>` 形式即使目录名
+> 相同也可能**新建一个站点**，导致你的固定域名收不到更新。
+> `publish.py` 默认走 `deploy <site> <zip>` 定向更新，就是为了避免这个坑。
+
+在 CI 里同步发布：在 `Settings → Secrets and variables → Actions` 添加名为
+`MASHANGJIA_LOGIN_TOKEN` 的 Secret；**未配置时该步骤自动跳过**，不影响 GitHub Pages 主流程。
 
 > ⚠️ Token 只放在 CI Secret 或环境变量里，**不要写进任何文件**。仓库的 `.gitignore`
 > 已屏蔽 `.env*` / `*.token`，`scripts/publish.py` 也只在进程环境里读取它。

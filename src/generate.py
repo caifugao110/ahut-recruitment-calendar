@@ -2,8 +2,8 @@
 generate.py — 把抓取到的招聘会数据渲染成一个纯静态单页站点（site/index.html）。
 
 页面结构：
-    第一级（默认） 招聘会总览  —— 按月份 / 日期罗列全部场次，已过期的照常列出但灰显
-    第二级         与我相关    —— 按 config/profile.json 的画像打分排序，只列匹配项
+    招聘会总览（默认页） —— 按月份 / 日期罗列场次，默认只显示未过期，已过期可一键切出
+    与我相关            —— 按 config/profile.json 的画像（专业 + 学历 + 意向城市）打分排序
 
 产物不依赖任何后端，双击即可打开，也能直接托管到任意静态空间。
 """
@@ -35,47 +35,60 @@ body{margin:0;padding:0 14px 60px;background:var(--bg);color:var(--ink);
 a{color:var(--blue);text-decoration:none;}
 a:hover{text-decoration:underline;}
 
-header{background:linear-gradient(135deg,#2b3a55,#1f2430);color:#fff;border-radius:18px;
-  padding:26px 28px;margin:20px 0 0;position:relative;overflow:hidden;
-  box-shadow:0 10px 28px rgba(31,36,48,.16);}
-header::after{content:"";position:absolute;right:-40px;top:-50px;width:220px;height:220px;
-  background:radial-gradient(circle,rgba(212,36,60,.5),transparent 65%);}
-header h1{margin:0 0 6px;font-size:23px;position:relative;z-index:1;}
+header{background:linear-gradient(135deg,#2b3a55,#1f2430);color:#fff;border-radius:20px;
+  padding:28px 30px;margin:20px 0 0;position:relative;overflow:hidden;
+  box-shadow:0 12px 32px rgba(31,36,48,.16);}
+header::after{content:"";position:absolute;right:-50px;top:-60px;width:240px;height:240px;
+  background:radial-gradient(circle,rgba(212,36,60,.5),transparent 66%);}
+header h1{margin:0 0 7px;font-size:24px;letter-spacing:.3px;position:relative;z-index:1;}
 header .meta{color:#c3cbdd;font-size:13px;position:relative;z-index:1;}
-header .meta code{background:rgba(255,255,255,.12);padding:1px 7px;border-radius:5px;}
+header .meta code{background:rgba(255,255,255,.13);padding:1px 7px;border-radius:5px;}
+header .meta a{color:#cdd6ea;}
 
-.stats{display:grid;grid-template-columns:repeat(4,1fr);gap:12px;margin:16px 0;}
-.stat{background:var(--card);border:1px solid var(--line);border-radius:13px;padding:14px 16px;}
+.stats{display:grid;grid-template-columns:repeat(4,1fr);gap:12px;margin:16px 0 4px;}
+.stat{background:var(--card);border:1px solid var(--line);border-radius:14px;padding:14px 16px;
+  box-shadow:0 1px 3px rgba(31,36,48,.04);}
 .stat .n{font-size:26px;font-weight:700;line-height:1.15;}
 .stat .n small{font-size:13px;color:var(--muted);font-weight:500;margin-left:3px;}
 .stat .l{font-size:12.5px;color:var(--ink2);margin-top:4px;}
 .stat.hl .n{color:var(--red);} .stat.ok .n{color:var(--green);} .stat.ex .n{color:var(--grey);}
 
-.tabs{display:flex;gap:8px;margin:22px 0 0;border-bottom:2px solid var(--line);flex-wrap:wrap;}
+.tabshell{display:flex;justify-content:center;margin:22px 0 0;}
+.tabs{display:inline-flex;gap:4px;background:#e8ecf4;padding:4px;border-radius:13px;
+  box-shadow:inset 0 1px 2px rgba(31,36,48,.06);}
 .tab{appearance:none;border:none;background:transparent;cursor:pointer;font:inherit;
-  font-size:15px;font-weight:600;color:var(--muted);padding:10px 18px;border-radius:10px 10px 0 0;}
-.tab .lv{font-size:11px;font-weight:700;color:#fff;background:var(--grey);
-  border-radius:5px;padding:1px 6px;margin-right:7px;vertical-align:1px;}
-.tab[aria-selected="true"]{color:var(--ink);background:var(--card);border:1px solid var(--line);border-bottom:none;}
-.tab[aria-selected="true"] .lv{background:var(--red);}
-.tab .cnt{font-size:12px;color:var(--muted);margin-left:6px;font-weight:500;}
-.panel{display:none;padding-top:18px;}
+  font-size:14.5px;font-weight:600;color:#5b6478;padding:9px 24px;border-radius:10px;
+  display:flex;align-items:center;gap:8px;transition:color .16s ease,background .16s ease;}
+.tab:hover{color:var(--ink);}
+.tab[aria-selected="true"]{background:#fff;color:var(--ink);box-shadow:0 2px 8px rgba(31,36,48,.13);}
+.tab .cnt{font-size:11.5px;font-weight:700;min-width:21px;height:21px;padding:0 6px;
+  border-radius:999px;background:#d7dce7;color:#5b6478;
+  display:flex;align-items:center;justify-content:center;transition:all .16s ease;}
+.tab[aria-selected="true"] .cnt{background:var(--red);color:#fff;}
+.panel{display:none;padding-top:16px;}
 .panel.active{display:block;}
 .nojs .panel{display:block !important;}
 
-.bar{display:flex;gap:8px;flex-wrap:wrap;align-items:center;margin:0 0 16px;}
+.bar{display:flex;gap:7px;flex-wrap:wrap;align-items:center;margin:0 0 14px;
+  padding-bottom:13px;border-bottom:1px solid var(--line);}
 .fbtn{appearance:none;border:1px solid var(--line);background:var(--card);cursor:pointer;
-  font:inherit;font-size:12.5px;color:var(--ink2);padding:5px 13px;border-radius:999px;}
+  font:inherit;font-size:12.5px;color:var(--ink2);padding:5px 14px;border-radius:999px;
+  transition:all .15s ease;}
+.fbtn:hover{border-color:#c8cfdd;color:var(--ink);}
 .fbtn.on{background:var(--ink);color:#fff;border-color:var(--ink);}
+.fhint{font-size:12px;color:var(--muted);margin-left:auto;}
+.filter-empty{background:var(--card);border:1px dashed #d9dee8;border-radius:12px;
+  padding:14px 18px;font-size:13px;color:var(--muted);}
 
-h2.month{font-size:16px;margin:24px 0 10px;padding-left:11px;border-left:4px solid var(--ink);}
+h2.month{font-size:16px;margin:22px 0 10px;padding-left:11px;border-left:4px solid var(--ink);}
 h2.month span{font-size:12px;color:var(--muted);font-weight:400;margin-left:8px;}
 .empty{background:var(--card);border:1px dashed #d9dee8;border-radius:12px;padding:14px 18px;
   font-size:13px;color:var(--muted);}
 
-.day{background:var(--card);border:1px solid var(--line);border-radius:13px;margin-bottom:12px;overflow:hidden;}
-.day.past{background:#fbfbfc;}
-.day-hd{display:flex;align-items:center;gap:10px;padding:11px 16px;background:#fbfcfe;
+.day{background:var(--card);border:1px solid var(--line);border-radius:14px;margin-bottom:12px;overflow:hidden;
+  box-shadow:0 1px 3px rgba(31,36,48,.04);}
+.day.past{background:#fbfbfc;box-shadow:none;}
+.day-hd{display:flex;align-items:center;gap:10px;padding:11px 17px;background:#fbfcfe;
   border-bottom:1px solid var(--line);flex-wrap:wrap;}
 .day.past .day-hd{background:#f6f7f9;}
 .day-hd .d{font-size:15px;font-weight:700;}
@@ -85,9 +98,9 @@ h2.month span{font-size:12px;color:var(--muted);font-weight:400;margin-left:8px;
   background:var(--blue-soft);color:var(--blue);}
 .day.past .day-hd .cnt{background:var(--grey-soft);color:var(--grey);}
 
-.li{display:flex;gap:12px;padding:11px 16px;border-top:1px solid #f1f3f8;align-items:baseline;flex-wrap:wrap;}
+.li{display:flex;gap:12px;padding:11px 17px;border-top:1px solid #f1f3f8;align-items:baseline;flex-wrap:wrap;}
 .li:first-of-type{border-top:none;}
-.li .t{font-variant-numeric:tabular-nums;font-weight:600;font-size:12.5px;color:var(--blue);min-width:104px;}
+.li .t{font-variant-numeric:tabular-nums;font-weight:600;font-size:12.5px;color:var(--blue);min-width:96px;}
 .day.past .li .t{color:var(--grey);}
 .li .co{font-size:14px;font-weight:600;}
 .day.past .li .co{color:#9aa2b1;font-weight:500;}
@@ -99,13 +112,17 @@ h2.month span{font-size:12px;color:var(--muted);font-weight:400;margin-left:8px;
 .st-upcoming{background:var(--green-soft);color:var(--green);}
 .li .lk{font-size:12px;color:var(--muted);margin-top:3px;}
 
-.card{background:var(--card);border:1px solid var(--line);border-radius:13px;padding:16px 20px;margin-bottom:12px;}
-.card.past{background:#fbfbfc;}
+.card{background:var(--card);border:1px solid var(--line);border-radius:14px;padding:16px 20px;margin-bottom:12px;
+  box-shadow:0 1px 3px rgba(31,36,48,.04);}
+.card.t1{border-left:3px solid var(--red);}
+.card.t2{border-left:3px solid var(--amber);}
+.card.t3{border-left:3px solid #cfd5e0;}
+.card.past{background:#fbfbfc;box-shadow:none;opacity:.92;}
 .card-hd{display:flex;align-items:baseline;gap:9px;flex-wrap:wrap;margin-bottom:8px;}
 .rank{width:23px;height:23px;flex:0 0 23px;border-radius:7px;color:#fff;font-size:12.5px;
   display:flex;align-items:center;justify-content:center;font-weight:700;background:var(--grey);}
 .rank.t1{background:var(--red);} .rank.t2{background:var(--amber);} .rank.t3{background:#9aa2b1;}
-.card-hd .co{font-size:15px;font-weight:700;}
+.card-hd .co{font-size:15.5px;font-weight:700;letter-spacing:.2px;}
 .card.past .card-hd .co{color:#9aa2b1;font-weight:600;}
 .card-hd .when{margin-left:auto;font-size:12px;color:var(--blue);background:var(--blue-soft);
   border-radius:7px;padding:2px 9px;font-weight:600;white-space:nowrap;}
@@ -122,8 +139,8 @@ h2.month span{font-size:12px;color:var(--muted);font-weight:400;margin-left:8px;
 .b-mid{background:var(--amber-soft);color:var(--amber);}
 .b-lo{background:var(--grey-soft);color:var(--grey);}
 .b-city{background:var(--blue-soft);color:var(--blue);}
+.b-edu{background:#f3eefb;color:#6d3fc4;}
 .b-score{background:var(--red-soft);color:var(--red);}
-.b-exp{background:var(--grey-soft);color:var(--grey);}
 
 table{width:100%;border-collapse:collapse;background:var(--card);border:1px solid var(--line);
   border-radius:12px;overflow:hidden;font-size:12.5px;}
@@ -131,47 +148,74 @@ thead th{background:#f0f2f7;color:var(--ink2);font-weight:600;text-align:left;pa
 tbody td{padding:8px 11px;border-top:1px solid var(--line);vertical-align:middle;}
 tbody tr:nth-child(even){background:#fafbfd;}
 
+.note{background:linear-gradient(135deg,#eff4ff,#f8faff);border:1px solid #d8e3ff;color:#27407a;
+  border-radius:12px;padding:12px 16px;font-size:13px;margin:0 0 16px;line-height:1.75;}
+.note b{color:#1b2f5c;}
+.note .sep{color:#9fb0d8;margin:0 6px;}
 footer{margin-top:34px;font-size:12px;color:var(--muted);text-align:center;line-height:1.9;}
 footer a{color:var(--muted);}
-.note{background:var(--blue-soft);border:1px solid #d8e3ff;color:#27407a;border-radius:11px;
-  padding:11px 15px;font-size:13px;margin:0 0 16px;}
 @media(max-width:760px){
   .stats{grid-template-columns:repeat(2,1fr);}
   .li .t{min-width:0;} .card-hd .when{margin-left:0;} .row{flex-direction:column;gap:2px;}
+  .tab{padding:9px 15px;font-size:13.5px;}
 }
 """
 
 JS = """
 (function(){
-  var body=document.documentElement;
-  body.classList.remove('nojs');
+  var root=document.documentElement;
+  root.classList.remove('nojs');
+
   var tabs=[].slice.call(document.querySelectorAll('.tab'));
   var panels=[].slice.call(document.querySelectorAll('.panel'));
   function select(i){
     tabs.forEach(function(t,k){t.setAttribute('aria-selected', k===i?'true':'false');});
     panels.forEach(function(p,k){p.classList.toggle('active', k===i);});
-    try{location.hash='#p'+i;}catch(e){}
+    try{ history.replaceState(null,'','#p'+i); }catch(e){}
   }
   tabs.forEach(function(t,i){t.addEventListener('click',function(){select(i);});});
   var h=(location.hash||'').replace('#p','');
   select(h==='1'?1:0);
 
-  document.querySelectorAll('[data-filter]').forEach(function(btn){
-    btn.addEventListener('click',function(){
-      var group=btn.parentNode;
-      [].slice.call(group.querySelectorAll('[data-filter]')).forEach(function(b){
-        b.classList.toggle('on', b===btn);
-      });
-      var f=btn.getAttribute('data-filter');
-      [].slice.call(group.parentNode.parentNode.querySelectorAll('[data-status]')).forEach(function(el){
-        var s=el.getAttribute('data-status');
-        el.style.display = (f==='all'||f===s) ? '' : 'none';
-      });
-      [].slice.call(group.parentNode.parentNode.querySelectorAll('.month-block')).forEach(function(bl){
-        var vis=[].slice.call(bl.querySelectorAll('[data-status]')).filter(function(e){return e.style.display!=='none';});
-        bl.style.display = vis.length ? '' : 'none';
-      });
+  function panelOf(el){
+    var p=el;
+    while(p && p.classList && !p.classList.contains('panel')) p=p.parentElement;
+    return p;
+  }
+  function applyFilter(btn){
+    var group=btn.parentNode;
+    [].slice.call(group.querySelectorAll('[data-filter]')).forEach(function(b){
+      b.classList.toggle('on', b===btn);
     });
+    var f=btn.getAttribute('data-filter');
+    var panel=panelOf(group);
+    if(!panel) return;
+    var any=false;
+    [].slice.call(panel.querySelectorAll('[data-status]')).forEach(function(el){
+      var st=el.getAttribute('data-status');
+      var show = (f==='all') ? true
+               : (f==='expired') ? (st==='expired')
+               : (st!=='expired');
+      el.style.display = show ? '' : 'none';
+      if(show) any=true;
+    });
+    [].slice.call(panel.querySelectorAll('.month-block')).forEach(function(bl){
+      var vis=[].slice.call(bl.querySelectorAll('[data-status]'))
+               .filter(function(e){return e.style.display!=='none';});
+      bl.style.display = vis.length ? '' : 'none';
+    });
+    var tip=panel.querySelector('.filter-empty');
+    if(tip) tip.style.display = any ? 'none' : '';
+  }
+
+  document.querySelectorAll('[data-filter]').forEach(function(btn){
+    btn.addEventListener('click',function(){applyFilter(btn);});
+  });
+
+  // 初始状态：默认只显示未过期，无需手动筛选
+  [].slice.call(document.querySelectorAll('.panel')).forEach(function(panel){
+    var def=panel.querySelector('[data-filter].on') || panel.querySelector('[data-filter]');
+    if(def) applyFilter(def);
   });
 })();
 """
@@ -186,6 +230,15 @@ def _month_label(key: str) -> str:
     return f"{y}年{int(m)}月"
 
 
+def _day_label(date_str: str) -> str:
+    """把 2026-10-08 渲染成「10月8日」。"""
+    try:
+        d = dt.date.fromisoformat(date_str[:10])
+    except (ValueError, TypeError):
+        return date_str[:10]
+    return f"{int(d.month)}月{int(d.day)}日"
+
+
 class Generator:
     """静态站点生成器。"""
 
@@ -195,14 +248,11 @@ class Generator:
         self.site_dir = Path(config["output"]["site_dir"])
         self.site_dir.mkdir(parents=True, exist_ok=True)
 
-    # ------------------------------------------------------------------ 分组
-
     @staticmethod
     def group_by_month(fairs: List[Dict[str, Any]]) -> "OrderedDict[str, List[Dict[str, Any]]]":
         buckets: "OrderedDict[str, List[Dict[str, Any]]]" = OrderedDict()
         for f in fairs:
-            key = f["date"][:7]
-            buckets.setdefault(key, []).append(f)
+            buckets.setdefault(f["date"][:7], []).append(f)
         for key in buckets:
             buckets[key].sort(key=lambda x: (x["date"], x["time"], x["theme"]))
         return buckets
@@ -216,21 +266,23 @@ class Generator:
             buckets[key].sort(key=lambda x: (x["time"], x["theme"]))
         return buckets
 
-    # ------------------------------------------------------------------ 片段
+    @staticmethod
+    def _filter_bar(hint: str) -> str:
+        """筛选条。默认选中「未过期」，进页面即可直接看到有效场次。"""
+        return (
+            '<div class="bar">'
+            '<button class="fbtn on" data-filter="active">未过期</button>'
+            '<button class="fbtn" data-filter="all">全部</button>'
+            '<button class="fbtn" data-filter="expired">已过期</button>'
+            f'<span class="fhint">{esc(hint)}</span>'
+            "</div>"
+        )
 
     def _overview(self, fairs: List[Dict[str, Any]], months: List[str]) -> str:
         buckets = self.group_by_month(fairs)
         parts: List[str] = []
-
-        filters = (
-            '<div class="bar" data-group="ov">'
-            '<button class="fbtn on" data-filter="all">全部</button>'
-            '<button class="fbtn" data-filter="upcoming">未过期</button>'
-            '<button class="fbtn" data-filter="today">今天</button>'
-            '<button class="fbtn" data-filter="expired">已过期</button>'
-            "</div>"
-        )
-        parts.append(filters)
+        parts.append(self._filter_bar("默认只显示未过期场次，已过期的可切换到「全部」或「已过期」查看"))
+        parts.append('<div class="filter-empty" style="display:none">当前筛选条件下没有场次。</div>')
 
         for key in months:
             items = buckets.get(key, [])
@@ -243,12 +295,11 @@ class Generator:
                 parts.append('<div class="empty">本月暂无招聘会安排（一旦官网放出，每日 02:00 会自动补上）。</div>')
             else:
                 for day, rows in self.group_by_day(items).items():
-                    d = dt.date.fromisoformat(day)
                     past = rows[0]["status"] == "expired"
                     cls = "day past" if past else "day"
                     parts.append(
-                        f'<div class="{cls}" data-status="{esc(rows[0]["status"])}">'
-                        f'<div class="day-hd"><span class="d">{int(d.month)}月{int(d.day)}日</span>'
+                        f'<div class="{cls}" data-status="{esc(rows[0]['status'])}">'
+                        f'<div class="day-hd"><span class="d">{esc(_day_label(day))}</span>'
                         f'<span class="w">{esc(rows[0].get("weekday",""))}</span>'
                         f'<span class="cnt">{len(rows)} 场 · {esc(rows[0]["status_label"])}</span></div>'
                     )
@@ -260,39 +311,40 @@ class Generator:
                             '<div style="flex:1;min-width:220px">'
                             f'<div class="co">{esc(r["theme"])}</div>'
                             f'<div class="vn">{esc(r["venue"])}</div>'
-                            f'<div class="lk"><a href="{esc(link)}" target="_blank" rel="noopener">查看官方简章 →</a></div>'
+                            f'<div class="lk"><a href="{esc(link)}" target="_blank" rel="noopener">'
+                            "查看官方简章 →</a></div>"
                             "</div>"
                             f'<div class="st st-{esc(r["status"])}">{esc(r["status_label"])}</div>'
                             "</div>"
                         )
                     parts.append("</div>")
             parts.append("</div>")
-
         return "".join(parts)
 
     def _relevant(self, scored: List[Dict[str, Any]]) -> str:
         matched = [s for s in scored if s["tier"] > 0]
         major = esc(self.profile.get("major", ""))
+        edu = esc(self.profile.get("education", ""))
         cities = " / ".join(esc(c) for c in self.profile.get("cities", {}).get("primary", []))
         parts: List[str] = []
+
+        bits = [f"专业 <b>{major}</b>"]
+        if edu:
+            bits.append(f"学历 <b>{edu}</b>")
+        bits.append(f"意向城市 <b>{cities}</b>")
         parts.append(
-            f'<div class="note">匹配画像：<b>专业 {major}</b>　·　<b>意向城市 {cities}</b>。'
-            "打分与关键词均来自 <code>config/profile.json</code>，改动配置即可适配其他人。"
-            "已过期的匹配项同样保留，仅作灰显。</div>"
+            '<div class="note">匹配画像：<span>'
+            + '<span class="sep">·</span>'.join(bits)
+            + "</span><br>打分与关键词均来自 <code>config/profile.json</code>，"
+            "改动配置即可适配其他人。已过期的匹配项同样保留，仅作灰显。</div>"
         )
 
         if not matched:
             parts.append('<div class="empty">当前区间内没有与画像匹配的招聘会。每日 02:00 会自动重新抓取并更新。</div>')
             return "".join(parts)
 
-        filters = (
-            '<div class="bar" data-group="rv">'
-            '<button class="fbtn on" data-filter="all">全部</button>'
-            '<button class="fbtn" data-filter="upcoming">未过期</button>'
-            '<button class="fbtn" data-filter="expired">已过期</button>'
-            "</div>"
-        )
-        parts.append(filters)
+        parts.append(self._filter_bar("默认只显示未过期场次；已过期但仍想参考的可切换到「全部」"))
+        parts.append('<div class="filter-empty" style="display:none">当前筛选条件下没有匹配项。</div>')
 
         tier_meta = {1: ("强相关", "t1"), 2: ("相关", "t2"), 3: ("沾边", "t3")}
         for tier, (label, cls) in tier_meta.items():
@@ -302,22 +354,24 @@ class Generator:
             parts.append(f'<div class="month-block"><h2 class="month">{label}<span>{len(group)} 家</span></h2>')
             for idx, s in enumerate(group, 1):
                 past = s["status"] == "expired"
-                card_cls = "card past" if past else "card"
-                st_cls = "b-exp" if past else "b-hi"
+                card_cls = f"card t{cls}" + (" past" if past else "")
                 parts.append(f'<div class="{card_cls}" data-status="{esc(s["status"])}">')
                 parts.append('<div class="card-hd">'
                              f'<span class="rank {cls}">{idx}</span>'
                              f'<span class="co">{esc(s["theme"])}</span>'
-                             f'<span class="when">{esc(s["date"][5:].replace("-","月"))}日 {esc(s["time"])}</span>'
+                             f'<span class="when">{esc(_day_label(s["date"]))} {esc(s["time"])}</span>'
                              "</div>")
+
                 badges = [f'<span class="badge b-score">{s["score"]} 分</span>']
-                badges.append(f'<span class="badge {st_cls if past else "b-hi"}">{esc(s["status_label"])}</span>')
+                badges.append(f'<span class="badge {"b-lo" if past else "b-hi"}">{esc(s["status_label"])}</span>')
                 if s["major_hits"]:
                     badges.append(f'<span class="badge b-hi">专业：{esc(s["major_hits"][0])}</span>')
                 if s["city_hits"]:
                     badges.append(f'<span class="badge b-city">城市：{esc("、".join(s["city_hits"]))}</span>')
                 elif s["city_belt_hits"]:
                     badges.append(f'<span class="badge b-city">周边：{esc("、".join(s["city_belt_hits"][:3]))}</span>')
+                if s.get("edu_hits"):
+                    badges.append(f'<span class="badge b-edu">学历：{esc("、".join(s["edu_hits"][:2]))}</span>')
                 parts.append(f'<div class="row"><div class="k">匹配</div><div class="v">{"".join(badges)}</div></div>')
                 parts.append(f'<div class="row"><div class="k">地点</div><div class="v">{esc(s["venue"])}</div></div>')
 
@@ -343,7 +397,7 @@ class Generator:
             status = "已过期" if s["status"] == "expired" else s["status_label"]
             rows.append(
                 "<tr>"
-                f"<td>{esc(s['date'][5:])}</td>"
+                f"<td>{esc(_day_label(s['date']))}</td>"
                 f"<td>{esc(s['theme'])}</td>"
                 f"<td>{esc(s['time'])}</td>"
                 f"<td>{esc(s['venue'])}</td>"
@@ -359,8 +413,6 @@ class Generator:
             f"<tbody>{''.join(rows)}</tbody></table>"
         )
 
-    # ------------------------------------------------------------------ 渲染
-
     def render(self, fairs: List[Dict[str, Any]], scored: List[Dict[str, Any]],
                months: List[str], today: dt.date) -> str:
         total = len(fairs)
@@ -375,36 +427,40 @@ class Generator:
         table = self._table(scored)
 
         return (
-            "<!DOCTYPE html><html lang=\"zh-CN\" class=\"nojs\">"
-            "<head><meta charset=\"utf-8\">"
-            "<meta name=\"viewport\" content=\"width=device-width,initial-scale=1\">"
+            '<!DOCTYPE html><html lang="zh-CN" class="nojs">'
+            '<head><meta charset="utf-8">'
+            '<meta name="viewport" content="width=device-width,initial-scale=1">'
             f"<title>{esc(self.config['site']['name'])} · {esc(rng['start'][:4])}年9-12月</title>"
-            "<meta name=\"description\" content=\"安徽工业大学校园招聘会日历：每日自动抓取，"
-            "含招聘会总览与按专业/城市画像筛选的个性化匹配。\">"
+            '<meta name="description" content="安徽工业大学校园招聘会日历：每日自动抓取，'
+            '含招聘会总览与按专业、学历、城市画像筛选的个性化匹配。">'
             f"<style>{CSS}</style></head><body><div class=\"wrap\">"
             f"<header><h1>{esc(self.config['site']['name'])}</h1>"
             f"<div class=\"meta\">统计区间 <code>{esc(rng['start'])} ~ {esc(rng['end'])}</code>　·　"
             f"数据更新 <code>{esc(now)}</code>　·　每日 <code>02:00</code> 自动更新<br>"
-            "来源：<a style=\"color:#cdd6ea\" href=\"" + esc(self.config["site"]["calendar_url"]) +
+            "来源：<a href=\"" + esc(self.config["site"]["calendar_url"]) +
             "\" target=\"_blank\" rel=\"noopener\">ahut.ahbys.com 招聘日历</a></div></header>"
             "<div class=\"stats\">"
-            f"<div class=\"stat hl\"><div class=\"n\">{total}<small>场</small></div><div class=\"l\">区间内总场次</div></div>"
-            f"<div class=\"stat ok\"><div class=\"n\">{upcoming}<small>场</small></div><div class=\"l\">未过期</div></div>"
-            f"<div class=\"stat ex\"><div class=\"n\">{expired}<small>场</small></div><div class=\"l\">已过期（仍列出）</div></div>"
-            f"<div class=\"stat\"><div class=\"n\">{matched}<small>家</small></div><div class=\"l\">与我相关</div></div>"
+            f"<div class=\"stat hl\"><div class=\"n\">{total}<small>场</small></div>"
+            "<div class=\"l\">区间内总场次</div></div>"
+            f"<div class=\"stat ok\"><div class=\"n\">{upcoming}<small>场</small></div>"
+            "<div class=\"l\">未过期</div></div>"
+            f"<div class=\"stat ex\"><div class=\"n\">{expired}<small>场</small></div>"
+            "<div class=\"l\">已过期（可切换查看）</div></div>"
+            f"<div class=\"stat\"><div class=\"n\">{matched}<small>家</small></div>"
+            "<div class=\"l\">与我相关</div></div>"
             "</div>"
-            '<div class="tabs">'
-            f'<button class="tab" aria-selected="true"><span class="lv">第一级</span>招聘会总览'
+            '<div class="tabshell"><div class="tabs">'
+            f'<button class="tab" aria-selected="true">招聘会总览'
             f'<span class="cnt">{total}</span></button>'
-            f'<button class="tab" aria-selected="false"><span class="lv">第二级</span>与我相关'
+            f'<button class="tab" aria-selected="false">与我相关'
             f'<span class="cnt">{matched}</span></button>'
-            "</div>"
+            "</div></div>"
             f'<div class="panel active">{overview}</div>'
             f'<div class="panel">{relevant}'
             f'<h2 class="month">匹配明细<span>共 {len(scored)} 场</span></h2>{table}</div>'
             "<footer>"
             "本站为开源项目，每日 02:00 自动从学校就业平台抓取并重新发布；"
-            "已过期的场次照常罗列，仅标记为灰色。<br>"
+            "已过期的场次照常收录，切换筛选即可查看。<br>"
             "招聘信息以学校就业网实时发布为准，如有出入请以前者为准。"
             f"<br>生成时间 {esc(now)}　·　今天是 {esc(today.isoformat())}"
             "</footer></div>"
@@ -416,7 +472,6 @@ class Generator:
         html_text = self.render(fairs, scored, months, today)
         out = self.site_dir / self.config["output"]["index_name"]
         out.write_text(html_text, encoding="utf-8")
-        # 同步一份数据快照，方便前端/其他工具二次利用
         (self.site_dir / "data.json").write_text(
             json.dumps({"updated_at": dt.datetime.now().isoformat(timespec="seconds"),
                         "total": len(fairs), "fairs": scored}, ensure_ascii=False),

@@ -31,7 +31,7 @@ sys.path.insert(0, str(ROOT))
 
 from src.generate import Generator  # noqa: E402
 from src.matcher import Matcher, mark_status  # noqa: E402
-from src.scraper import Scraper  # noqa: E402
+from src.scraper import Scraper, normalize_time  # noqa: E402
 
 
 def load_json(path: Path) -> Dict[str, Any]:
@@ -110,6 +110,9 @@ def main() -> int:
         added = merge_dataset(dataset, fairs)
 
     all_fairs = [v for v in dataset.values() if in_range(v.get("date", ""), start, end)]
+    # 历史条目可能还留着 "2026年10月8日18:30-20:00" 这类旧写法，统一清洗成 "18:30-20:00"
+    for item in all_fairs:
+        item["time"] = normalize_time(item.get("time", ""))
     all_fairs.sort(key=lambda x: (x["date"], x["time"], x["theme"]))
     save_json(dataset_path, list(dataset.values()))
     print(f"[2/5] 合并数据集：新增 {added} 场，区间内累计 {len(all_fairs)} 场")

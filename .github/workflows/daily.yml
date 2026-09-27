@@ -85,9 +85,11 @@ jobs:
         with:
           node-version: "20"
 
-      - name: 同步发布到码上架
+      - name: 同步发布到码上架（固定地址 ahut-recruitment-calendar）
         if: env.MASHANGJIA_LOGIN_TOKEN != ''
-        run: python scripts/publish.py --mode account
+        run: python scripts/publish.py
+        # publish.py 会读 config/publish.json 的 "site" 定向更新该站点。
+        # 绑定自定义域名后必须走这种「按站点更新」的方式，按目录发布会新建站点。
 
       - name: 上传站点产物
         uses: actions/upload-artifact@v4

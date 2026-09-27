@@ -43,6 +43,11 @@ class Matcher:
         self.major_strong: List[str] = list(mk.get("strong", []))
         self.major_weak: List[str] = list(mk.get("weak", []))
 
+        edu = profile.get("education_keywords", {}) or {}
+        self.edu_label: str = profile.get("education", "")
+        self.edu_target: List[str] = list(edu.get("target", []))
+        self.edu_higher: List[str] = list(edu.get("higher", []))
+
         cities = profile.get("cities", {})
         self.city_primary: List[str] = list(cities.get("primary", []))
         belt = cities.get("belt", {}) or {}
@@ -55,6 +60,8 @@ class Matcher:
         self.w_city_primary = float(w.get("city_primary", 3.0))
         self.w_city_belt = float(w.get("city_belt", 1.5))
         self.w_city_ratio = float(w.get("city_weight_ratio", 1.2))
+        self.w_edu = float(w.get("education_match", 0.6))
+        self.w_edu_higher = float(w.get("education_higher_penalty", 0.3))
 
         t = profile.get("thresholds", {})
         self.t1 = float(t.get("tier1", 4.0))
@@ -87,6 +94,18 @@ class Matcher:
             score = 0.0
         return score, hits_p, hits_b
 
+    def score_edu(self, text: str) -> tuple:
+        """返回 (加分, 命中的学历关键词)。招硕士→小幅加分；只招博士→小幅扣分。"""
+        if not text:
+            return 0.0, []
+        target = [k for k in self.edu_target if k and k in text]
+        higher = [k for k in self.edu_higher if k and k in text]
+        if target:
+            return self.w_edu, target
+        if higher:
+            return -self.w_edu_higher, higher
+        return 0.0, []
+
     def evidence(self, text: str, keywords: List[str], limit: int = 3) -> List[str]:
         """抽取包含关键词的原文片段，作为匹配依据展示。"""
         if not keywords or not text:
@@ -112,7 +131,8 @@ class Matcher:
 
         m_score, m_hits = self.score_major(searchable)
         c_score, c_hits, c_belt = self.score_city(searchable)
-        total = m_score + c_score * self.w_city_ratio
+        e_score, e_hits = self.score_edu(searchable)
+        total = m_score + c_score * self.w_city_ratio + e_score
 
         if total >= self.t1:
             tier, tier_label = 1, "强相关"
@@ -134,9 +154,11 @@ class Matcher:
 
         return {
             **fair,
-            "score": round(total, 2),
+            "score": round(max(total, 0.0), 2),
             "major_score": round(m_score, 2),
             "city_score": round(c_score, 2),
+            "edu_score": round(e_score, 2),
+            "edu_hits": e_hits,
             "tier": tier,
             "tier_label": tier_label,
             "major_hits": m_hits,

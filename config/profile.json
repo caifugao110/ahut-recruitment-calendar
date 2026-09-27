@@ -2,6 +2,13 @@
   "_comment": "个人匹配画像。改这里就能适配别人的专业与意向城市，无需改代码。",
 
   "major": "材料科学与工程",
+  "education": "硕士研究生",
+
+  "education_keywords": {
+    "_comment": "识别简章中的学历要求。target 命中=该单位招你这个学历；higher 命中=门槛更高（如博士）",
+    "target": ["硕士", "研究生"],
+    "higher": ["博士"]
+  },
 
   "major_keywords": {
     "_comment": "命中即代表该单位招聘该专业方向。weight 越高越核心。",
@@ -48,7 +55,9 @@
     "major_weak": 0.8,
     "city_primary": 3.0,
     "city_belt": 1.2,
-    "city_weight_ratio": 1.2
+    "city_weight_ratio": 1.2,
+    "education_match": 0.6,
+    "education_higher_penalty": 0.3
   },
 
   "thresholds": {

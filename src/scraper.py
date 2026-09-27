@@ -164,7 +164,7 @@ class Scraper:
                 "id": str(row.get("ID")),
                 "theme": (row.get("Theme") or "").strip(),
                 "venue": (row.get("VenuesName") or "").strip(),
-                "time": (row.get("TimeSlotText") or "").strip(),
+                "time": normalize_time((row.get("TimeSlotText") or "").strip()),
                 "date": day.isoformat(),
                 "weekday": _weekday_cn(day),
             })
@@ -251,6 +251,37 @@ def _months_between(start: dt.date, end: dt.date) -> List[dt.date]:
         out.append(cur)
         cur = dt.date(cur.year + (cur.month // 12), (cur.month % 12) + 1, 1)
     return out
+
+
+_TIME_RANGE_RE = re.compile(r"(\d{1,2}:\d{2})\s*[-–—~至]\s*(\d{1,2}:\d{2})")
+_TIME_SINGLE_RE = re.compile(r"(\d{1,2}:\d{2})")
+_DATE_PREFIX_RE = re.compile(r"\d{4}年\d{1,2}月\d{1,2}日|\d{1,2}月\d{1,2}日")
+
+
+def normalize_time(text: str) -> str:
+    """
+    把简章里各种写法统一收敛为「HH:MM-HH:MM」（或单个「HH:MM」）。
+
+    源数据里 TimeSlotText 五花八门：
+        "10:00-11:30"                 -> 10:00-11:30
+        "2026年10月8日18:30-20:00"     -> 18:30-20:00
+        "10月9日 18:30-20:00"          -> 18:30-20:00
+        "2026年10月15日14:55-16:30"    -> 14:55-16:30
+        "2026年9月24日10：30"（全角冒号）-> 10:30
+    日期已经在日期列展示了，时间段里再重复一遍很啰嗦，这里只保留时间部分。
+    """
+    if not text:
+        return ""
+    t = text.replace("：", ":")          # 全角冒号 -> 半角
+    m = _TIME_RANGE_RE.search(t)
+    if m:
+        return f"{m.group(1)}-{m.group(2)}"
+    single = _TIME_SINGLE_RE.search(t)
+    if single:
+        return single.group(1)
+    # 只有日期、没有具体时间：至少把重复的日期前缀去掉
+    cleaned = _DATE_PREFIX_RE.sub("", t).strip()
+    return cleaned or text.strip()
 
 
 _TAG_RE = re.compile(r"<[^>]+>")
