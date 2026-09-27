@@ -92,7 +92,7 @@ python scripts/daily_update.py
 │   ├── publish.py               # 发布 site/ 到码上架（官方 CLI 的薄封装）
 │   └── sync_workflow.py         # 把更新时间同步成 GitHub Actions 的 cron
 ├── data/
-│   ├── dataset.json             # ★ 累计数据集（已过期场次永久保留，入库并由 CI 增量提交）
+│   ├── dataset.json             # ★ 累计数据集（已过期场次永久保留，CI 增量提交到独立的 data 分支，主分支不动）
 │   ├── snapshot/                # 每日原始快照 YYYY-MM-DD.json（本地，不入库）
 │   └── cache/                   # 招聘简章缓存，按 ID 一个文件（本地，不入库）
 ├── site/                        # ★ 生成产物（不入库，CI 通过 Pages 制品部署）
@@ -267,7 +267,7 @@ copy .env.example .env      # Windows（macOS / Linux 用 cp .env.example .env�
 
 1. 校验 cron 与配置是否一致；
 2. 抓取最新招聘会、合并进 `data/dataset.json`；
-3. 若数据有变化，自动提交并推送 `data/dataset.json`；
+3. 若数据有变化，自动提交并推送到独立的 `data` 分支（主分支保持只读、只存核心代码）；
 4. 重建站点并部署到 GitHub Pages；
 5. （可选）配置了码上架 Token 时同步发布到码上架。
 
