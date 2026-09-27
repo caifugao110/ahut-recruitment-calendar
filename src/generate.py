@@ -18,6 +18,8 @@ from collections import OrderedDict
 from pathlib import Path
 from typing import Any, Dict, List
 
+from src.textutil import clean_leading_marks
+
 CSS = """
 :root{
   --ink:#1f2430; --ink2:#4a5364; --muted:#8a93a5; --line:#e6e9f0;
@@ -27,6 +29,7 @@ CSS = """
   --green:#1a7f52; --green-soft:#e8f6ee;
   --blue:#2563eb; --blue-soft:#eff4ff;
   --grey:#98a1b2; --grey-soft:#f2f3f7;
+  --tab-h:62px;              /* 标签栏实际高度，由页面 JS 实测回写，供筛选条吸顶对齐 */
 }
 *{box-sizing:border-box;}
 body{margin:0;padding:0 14px 60px;background:var(--bg);color:var(--ink);
@@ -37,7 +40,7 @@ a{color:var(--blue);text-decoration:none;}
 a:hover{text-decoration:underline;}
 
 header{background:linear-gradient(135deg,#2b3a55,#1f2430);color:#fff;border-radius:20px;
-  padding:28px 30px;margin:20px 0 0;position:relative;overflow:hidden;
+  padding:26px 30px;margin:20px 0 0;position:relative;overflow:hidden;
   box-shadow:0 12px 32px rgba(31,36,48,.16);}
 header::after{content:"";position:absolute;right:-50px;top:-60px;width:240px;height:240px;
   background:radial-gradient(circle,rgba(212,36,60,.5),transparent 66%);}
@@ -45,33 +48,32 @@ header h1{margin:0 0 7px;font-size:24px;letter-spacing:.3px;position:relative;z-
 header .meta{color:#c3cbdd;font-size:13px;position:relative;z-index:1;}
 header .meta code{background:rgba(255,255,255,.13);padding:1px 7px;border-radius:5px;}
 header .meta a{color:#cdd6ea;}
-header .links{display:flex;flex-wrap:wrap;gap:10px;margin-top:18px;position:relative;z-index:1;}
-header .links a{display:inline-flex;align-items:center;gap:7px;font-size:13px;font-weight:600;
-  border-radius:10px;padding:8px 16px;letter-spacing:.2px;
-  transition:transform .15s ease,box-shadow .15s ease,background .15s ease;}
-header .links a:hover{text-decoration:none;transform:translateY(-1px);}
-header .links a.primary{background:#fff;color:#2b3a55;
-  box-shadow:0 4px 14px rgba(0,0,0,.22);}
-header .links a.primary:hover{box-shadow:0 7px 20px rgba(0,0,0,.3);background:#f4f7ff;}
-header .links a.ghost{background:rgba(255,255,255,.08);border:1px solid rgba(255,255,255,.3);
-  color:#e7ecf5;}
-header .links a.ghost:hover{background:rgba(255,255,255,.2);border-color:rgba(255,255,255,.5);}
-header .links svg{width:14px;height:14px;fill:currentColor;flex:0 0 14px;}
 
+/* 统计卡也是按钮：点哪张就跳到对应的筛选结果 */
 .stats{display:grid;grid-template-columns:repeat(4,1fr);gap:12px;margin:16px 0 4px;}
-.stat{background:var(--card);border:1px solid var(--line);border-radius:14px;padding:14px 16px;
-  box-shadow:0 1px 3px rgba(31,36,48,.04);}
-.stat .n{font-size:26px;font-weight:700;line-height:1.15;}
+.stat{display:block;width:100%;text-align:left;font:inherit;cursor:pointer;
+  background:var(--card);border:1px solid var(--line);border-radius:14px;padding:14px 16px;
+  box-shadow:0 1px 3px rgba(31,36,48,.04);
+  transition:transform .15s ease,box-shadow .15s ease,border-color .15s ease;}
+.stat:hover{transform:translateY(-2px);border-color:#cfd6e4;
+  box-shadow:0 8px 22px rgba(31,36,48,.1);}
+.stat:active{transform:translateY(0);}
+.stat:focus-visible{outline:2px solid var(--blue);outline-offset:2px;}
+.stat .n{display:block;font-size:26px;font-weight:700;line-height:1.15;}
 .stat .n small{font-size:13px;color:var(--muted);font-weight:500;margin-left:3px;}
-.stat .l{font-size:12.5px;color:var(--ink2);margin-top:4px;}
+.stat .l{font-size:12.5px;color:var(--ink2);margin-top:4px;display:flex;align-items:center;gap:4px;}
+.stat .l .go{font-size:11px;color:var(--muted);opacity:0;transition:opacity .15s ease;}
+.stat:hover .l .go{opacity:1;}
 .stat.hl .n{color:var(--red);} .stat.ok .n{color:var(--green);} .stat.ex .n{color:var(--grey);}
 
-/* 标签栏：向下滚动时吸顶固定在顶部 */
-.tabshell{position:sticky;top:0;z-index:60;display:flex;justify-content:center;
-  margin:22px 0 0;padding:12px 0 10px;
-  background:rgba(245,247,251,.93);
-  -webkit-backdrop-filter:saturate(180%) blur(10px);
-  backdrop-filter:saturate(180%) blur(10px);}
+/* 标签栏：向下滚动时吸顶固定在顶部。
+   注意：这里刻意不用 backdrop-filter —— 部分移动端浏览器（Safari 内核 / 微信 X5）
+   遇到毛玻璃会让 sticky 失效，移动端反馈过「电脑上固定、手机上不固定」，故改用不透明背景 */
+.tabshell{position:-webkit-sticky;position:sticky;top:0;z-index:60;display:flex;
+  justify-content:center;margin:22px 0 0;padding:12px 0 10px;background:var(--bg);}
+/* JS 兜底：浏览器确实不支持 sticky 时改用 fixed，并撑起等高占位避免跳动 */
+.tabshell-ph{height:0;}
+.tabshell.js-stuck{position:fixed;left:0;right:0;top:0;margin:0;}
 .tabs{display:inline-flex;gap:4px;background:#e8ecf4;padding:4px;border-radius:13px;
   box-shadow:inset 0 1px 2px rgba(31,36,48,.06);}
 .tab{appearance:none;border:none;background:transparent;cursor:pointer;font:inherit;
@@ -87,16 +89,73 @@ header .links svg{width:14px;height:14px;fill:currentColor;flex:0 0 14px;}
 .panel.active{display:block;}
 .nojs .panel{display:block !important;}
 
-.bar{display:flex;gap:7px;flex-wrap:wrap;align-items:center;margin:0 0 14px;
-  padding-bottom:13px;border-bottom:1px solid var(--line);}
+/* 筛选条跟着标签栏一起吸顶：往下翻场次时也能随时改筛选（同样不用毛玻璃，理由见标签栏） */
+.bar{position:-webkit-sticky;position:sticky;top:var(--tab-h,62px);z-index:55;
+  display:flex;gap:7px;flex-wrap:wrap;align-items:center;margin:0 0 14px;padding:9px 0 11px;
+  border-bottom:1px solid var(--line);scroll-margin-top:78px;background:var(--bg);}
 .fbtn{appearance:none;border:1px solid var(--line);background:var(--card);cursor:pointer;
   font:inherit;font-size:12.5px;color:var(--ink2);padding:5px 14px;border-radius:999px;
   transition:all .15s ease;}
 .fbtn:hover{border-color:#c8cfdd;color:var(--ink);}
 .fbtn.on{background:var(--ink);color:#fff;border-color:var(--ink);}
+.fbtn.disabled{opacity:.4;cursor:not-allowed;}
+.fbtn.disabled:hover{border-color:var(--line);color:var(--ink2);}
 .fhint{font-size:12px;color:var(--muted);margin-left:auto;}
+.fhint b{color:var(--ink);font-weight:700;font-variant-numeric:tabular-nums;}
 .filter-empty{background:var(--card);border:1px dashed #d9dee8;border-radius:12px;
   padding:14px 18px;font-size:13px;color:var(--muted);}
+
+/* 按日历筛选：有场次的日期可点，点一下只看当天；默认收起，点标题栏展开 */
+.calfilter{background:var(--card);border:1px solid var(--line);border-radius:14px;
+  padding:12px 14px 11px;margin:0 0 14px;max-width:472px;
+  box-shadow:0 1px 3px rgba(31,36,48,.04);}
+.cal-hd{display:flex;align-items:center;gap:8px;flex-wrap:wrap;margin-bottom:10px;
+  cursor:pointer;user-select:none;}
+.calfilter.collapsed .cal-hd{margin-bottom:0;}
+.cal-caret{display:inline-flex;width:16px;height:16px;color:var(--muted);margin-left:1px;
+  transition:transform .18s ease;}
+.cal-caret svg{width:16px;height:16px;fill:currentColor;}
+.calfilter.collapsed .cal-caret{transform:rotate(-90deg);}
+.cal-body{animation:calIn .18s ease;}
+@keyframes calIn{from{opacity:0;}to{opacity:1;}}
+.calfilter.collapsed .cal-body{display:none;}
+.cal-hd .cal-ic{display:inline-flex;width:17px;height:17px;color:var(--red);}
+.cal-hd .cal-ic svg{width:17px;height:17px;fill:currentColor;}
+.cal-hd .cal-tt{font-size:13.5px;font-weight:700;letter-spacing:.2px;}
+.cal-hd .cal-sel{margin-left:auto;font-size:11.5px;font-weight:600;color:var(--muted);
+  background:var(--grey-soft);border-radius:999px;padding:2px 10px;}
+.cal-hd .cal-sel.on{color:#fff;background:var(--red);}
+.cal-navs{display:inline-flex;align-items:center;gap:3px;}
+.calfilter.collapsed .cal-navs{display:none;}   /* 收起时不显示翻月控件 */
+.cal-navs .cal-ym{font-size:12.5px;font-weight:700;color:var(--ink2);min-width:78px;text-align:center;
+  font-variant-numeric:tabular-nums;}
+.cal-nav{appearance:none;border:1px solid var(--line);background:#fbfcfe;cursor:pointer;
+  width:26px;height:26px;border-radius:8px;color:var(--ink2);font-size:14px;line-height:1;
+  display:flex;align-items:center;justify-content:center;transition:all .15s ease;padding:0;}
+.cal-nav:hover:not(:disabled){border-color:var(--red);color:var(--red);background:#fff;}
+.cal-nav:disabled{opacity:.35;cursor:not-allowed;}
+.cal-clear{appearance:none;border:1px solid #f0d3d8;background:var(--red-soft);cursor:pointer;
+  font:inherit;font-size:11.5px;font-weight:600;color:var(--red);border-radius:8px;
+  padding:3px 10px;margin-left:5px;transition:all .15s ease;}
+.cal-clear:hover{background:var(--red);border-color:var(--red);color:#fff;}
+.cal-grid{display:grid;grid-template-columns:repeat(7,1fr);gap:4px;}
+.cal-w{font-size:11px;color:var(--muted);text-align:center;padding-bottom:2px;font-weight:600;}
+.cal-d{position:relative;height:31px;display:flex;align-items:center;justify-content:center;
+  font-size:12.5px;border-radius:9px;color:#c6ccd9;background:#fafbfd;}
+.cal-d.blank{background:transparent;}
+.cal-d.has{color:var(--ink);background:#fff;border:1px solid var(--line);cursor:pointer;font-weight:700;}
+.cal-d.has:hover{border-color:var(--red);color:var(--red);background:#fffafa;}
+.cal-d.has::after{content:"";position:absolute;bottom:4px;width:4px;height:4px;border-radius:50%;
+  background:var(--red);}
+.cal-d.has .cal-n{position:absolute;top:2px;right:3px;font-size:9.5px;font-style:normal;
+  font-weight:700;color:var(--amber);}
+.cal-d.sel{background:var(--red);border-color:var(--red);color:#fff;
+  box-shadow:0 5px 14px rgba(212,36,60,.3);}
+.cal-d.sel::after{background:#fff;}
+.cal-d.sel .cal-n{color:#ffe1e5;}
+.cal-d.today{outline:2px solid var(--blue);outline-offset:-2px;}
+.cal-tip{font-size:11.5px;color:var(--muted);margin-top:9px;}
+.cal-tip b{color:var(--red);}
 
 h2.month{font-size:16px;margin:22px 0 10px;padding-left:11px;border-left:4px solid var(--ink);}
 h2.month span{font-size:12px;color:var(--muted);font-weight:400;margin-left:8px;}
@@ -120,29 +179,40 @@ h2.month span{font-size:12px;color:var(--muted);font-weight:400;margin-left:8px;
   transition:background .15s ease;}
 .li:first-of-type{border-top:none;}
 .li:hover{background:#f8faff;}
+/* 列表行三列：左＝时间+地点，中＝单位名 / 查看简章 / 薪资待遇（三行），右＝状态 */
+.li .tcol{flex:0 0 126px;display:flex;flex-direction:column;gap:5px;}
 .li .t{font-variant-numeric:tabular-nums;font-weight:700;font-size:12px;color:var(--blue);
-  min-width:92px;background:var(--blue-soft);border-radius:8px;padding:4px 0;text-align:center;
-  margin-top:1px;flex:0 0 92px;}
+  background:var(--blue-soft);border-radius:8px;padding:4px 0;text-align:center;}
 .day.past .li .t{color:var(--grey);background:var(--grey-soft);}
-.li .bd{flex:1;min-width:220px;}
+.li .bd{flex:1;min-width:200px;display:flex;flex-direction:column;align-items:flex-start;}
 .li .co{font-size:14.5px;font-weight:700;letter-spacing:.2px;}
 .day.past .li .co{color:#9aa2b1;font-weight:600;}
-.li .vn{font-size:12.5px;color:var(--ink2);margin-top:3px;display:flex;align-items:center;gap:4px;}
-.li .vn svg{width:12px;height:12px;fill:#a6aebe;flex:0 0 12px;}
+.li .lk{margin-top:6px;}
+.li .vn{font-size:11.5px;line-height:1.45;color:var(--ink2);display:flex;align-items:flex-start;
+  gap:3px;padding:0 3px;overflow-wrap:break-word;}
+.li .vn svg{width:11px;height:11px;fill:#a6aebe;flex:0 0 11px;margin-top:2px;}
 .day.past .li .vn{color:#aab1bf;}
-.li .pay{display:inline-flex;align-items:center;gap:5px;margin-top:5px;font-size:12px;
+/* 薪资待遇单独占一行（放在单位名下方），不与单位名、简章按钮抢同一行的空间 */
+.pay{display:inline-flex;align-items:center;gap:5px;margin-top:6px;font-size:12px;line-height:1.5;
   font-weight:600;color:var(--amber);background:var(--amber-soft);border:1px solid #f3e3c3;
-  border-radius:7px;padding:2px 9px;max-width:100%;}
-.li .pay svg{width:12px;height:12px;fill:currentColor;flex:0 0 12px;}
-.day.past .li .pay{color:#b6a98f;background:#f6f4ef;border-color:#e9e5da;}
+  border-radius:8px;padding:2px 9px;max-width:100%;min-width:0;}
+.pay svg{width:12px;height:12px;fill:currentColor;flex:0 0 12px;}
+.day.past .li .pay,.card.past .pay{color:#b6a98f;background:#f6f4ef;border-color:#e9e5da;}
 .li .st{margin-left:auto;font-size:11.5px;font-weight:700;border-radius:6px;padding:3px 10px;
   white-space:nowrap;flex:0 0 auto;}
 .st-expired{background:var(--grey-soft);color:var(--grey);}
 .st-today{background:var(--red-soft);color:var(--red);}
 .st-upcoming{background:var(--green-soft);color:var(--green);}
-.li .lk{font-size:12px;margin-top:5px;}
-.li .lk a{color:var(--muted);transition:color .15s ease;}
-.li .lk a:hover{color:var(--blue);text-decoration:none;}
+/* 「查看官方简章」做成小按钮，hover 反色，比裸链接更好点也更好看 */
+a.brief{display:inline-flex;align-items:center;gap:6px;font-size:12.5px;font-weight:600;
+  color:var(--blue);background:var(--blue-soft);border:1px solid #dbe4fb;border-radius:9px;
+  padding:5px 13px;letter-spacing:.1px;transition:all .16s ease;}
+a.brief:hover{background:var(--blue);border-color:var(--blue);color:#fff;text-decoration:none;
+  transform:translateY(-1px);box-shadow:0 5px 14px rgba(37,99,235,.28);}
+a.brief svg{width:12px;height:12px;fill:currentColor;flex:0 0 12px;transition:transform .16s ease;}
+a.brief:hover svg{transform:translateX(2px);}
+.day.past a.brief,.card.past a.brief{color:#8b94a5;background:#f6f7f9;border-color:#e7eaf0;}
+.day.past a.brief:hover,.card.past a.brief:hover{background:#98a1b2;border-color:#98a1b2;color:#fff;box-shadow:none;}
 
 .card{background:var(--card);border:1px solid var(--line);border-radius:14px;padding:16px 20px;margin-bottom:12px;
   box-shadow:0 1px 3px rgba(31,36,48,.04);}
@@ -150,14 +220,22 @@ h2.month span{font-size:12px;color:var(--muted);font-weight:400;margin-left:8px;
 .card.t2{border-left:3px solid var(--amber);}
 .card.t3{border-left:3px solid #cfd5e0;}
 .card.past{background:#fbfbfc;box-shadow:none;opacity:.92;}
-.card-hd{display:flex;align-items:baseline;gap:9px;flex-wrap:wrap;margin-bottom:8px;}
+.card-hd{display:flex;align-items:center;gap:9px;flex-wrap:wrap;margin-bottom:8px;}
+.card-hd .brief{margin-left:auto;}
 .rank{width:23px;height:23px;flex:0 0 23px;border-radius:7px;color:#fff;font-size:12.5px;
   display:flex;align-items:center;justify-content:center;font-weight:700;background:var(--grey);}
 .rank.t1{background:var(--red);} .rank.t2{background:var(--amber);} .rank.t3{background:#9aa2b1;}
 .card-hd .co{font-size:15.5px;font-weight:700;letter-spacing:.2px;}
 .card.past .card-hd .co{color:#9aa2b1;font-weight:600;}
-.card-hd .when{margin-left:auto;font-size:12px;color:var(--blue);background:var(--blue-soft);
-  border-radius:7px;padding:2px 9px;font-weight:600;white-space:nowrap;}
+/* 时间胶囊：卡片里与地点同一行，时间在左 */
+.when{font-size:12px;color:var(--blue);background:var(--blue-soft);
+  border-radius:7px;padding:2px 9px;font-weight:600;white-space:nowrap;
+  font-variant-numeric:tabular-nums;}
+.card.past .when{color:var(--grey);background:var(--grey-soft);}
+.place{font-size:12.5px;color:var(--ink2);display:inline-flex;align-items:center;gap:4px;}
+.place svg{width:12px;height:12px;fill:#a6aebe;flex:0 0 12px;}
+.card.past .place{color:#aab1bf;}
+.row.when-place{display:flex;align-items:center;gap:10px;flex-wrap:wrap;margin:6px 0 5px;}
 .row{font-size:13px;margin:4px 0;display:flex;gap:8px;}
 .row .k{color:var(--muted);flex:0 0 68px;font-size:12.5px;}
 .row .v{flex:1;}
@@ -188,10 +266,15 @@ footer{margin-top:34px;font-size:12px;color:var(--muted);text-align:center;line-
 footer a{color:var(--muted);}
 @media(max-width:760px){
   .stats{grid-template-columns:repeat(2,1fr);}
-  .li{flex-wrap:wrap;} .li .t{min-width:0;flex:0 0 auto;padding:4px 10px;}
+  header{padding:22px 20px;}
+  .li{flex-wrap:wrap;}
+  .li .tcol{flex:1 1 100%;flex-direction:row;align-items:center;gap:8px;}
+  .li .t{flex:0 0 auto;padding:4px 12px;}
+  .li .vn{padding:0;font-size:12px;}
   .li .st{margin-left:0;}
-  .card-hd .when{margin-left:0;} .row{flex-direction:column;gap:2px;}
+  .row{flex-direction:column;gap:2px;}
   .tab{padding:9px 15px;font-size:13.5px;}
+  .cal-grid{gap:3px;} .cal-navs .cal-ym{min-width:64px;}
 }
 """
 
@@ -212,28 +295,20 @@ FAVICON_SVG = """<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 64 64" rol
 </svg>
 """
 
-# GitHub 与 Pages 图标（内联 SVG，避免外链依赖）
-ICON_GITHUB = ('<svg viewBox="0 0 16 16" aria-hidden="true"><path d="M8 0C3.58 0 0 3.58 0 8c0 3.54 '
-               '2.29 6.53 5.47 7.59.4.07.55-.17.55-.38 0-.19-.01-.82-.01-1.49-2.01.37-2.53-.49-2.69-.94'
-               '-.09-.23-.48-.94-.82-1.13-.28-.15-.68-.52-.01-.53.63-.01 1.08.58 1.23.82.72 1.21 1.87.87 '
-               '2.33.66.07-.52.28-.87.51-1.07-1.78-.2-3.64-.89-3.64-3.95 0-.87.31-1.59.82-2.15-.08-.2-.36'
-               '-1.02.08-2.12 0 0 .67-.21 2.2.82a7.4 7.4 0 0 1 2-.27c.68 0 1.36.09 2 .27 1.53-1.04 2.2-.82 '
-               '2.2-.82.44 1.1.16 1.92.08 2.12.51.56.82 1.27.82 2.15 0 3.07-1.87 3.75-3.65 3.95.29.25.54.73'
-               '.54 1.48 0 1.07-.01 1.93-.01 2.2 0 .21.15.46.55.38A8.01 8.01 0 0 0 16 8c0-4.42-3.58-8-8-8z"/>'
-               '</svg>')
-ICON_PAGE = ('<svg viewBox="0 0 16 16" aria-hidden="true"><path d="M8 0a8 8 0 1 0 0 16A8 8 0 0 0 8 0zm'
-             '5.9 5h-2.3a12.6 12.6 0 0 0-1-2.4A6.5 6.5 0 0 1 13.9 5zM8 1.6c.6.9 1.1 2 1.4 3.4H6.6C6.9 '
-             '3.6 7.4 2.5 8 1.6zM1.6 9.5c-.1-.5-.1-1 0-1.5h2.7a16 16 0 0 0 0 1.5H1.6zm.5 1.5h2.3c.2.9.6 '
-             '1.7 1 2.4A6.5 6.5 0 0 1 2.1 11zm2.3-4H2.1a6.5 6.5 0 0 1 3.4-2.4c-.5.7-.8 1.5-1 2.4zM8 '
-             '14.4c-.6-.9-1.1-2-1.4-3.4h2.8c-.3 1.4-.8 2.5-1.4 3.4zm1.7-4.9H6.3a14 14 0 0 1 0-1.5h3.4c.1.5.1 '
-             '1 0 1.5zm.4 4.4c.4-.7.8-1.5 1-2.4h2.3a6.5 6.5 0 0 1-3.3 2.4zm1.4-4h2.7c.1-.5.1-1 '
-             '0-1.5h-2.7a16 16 0 0 1 0 1.5z"/></svg>')
+# 页面内联 SVG 图标（避免外链依赖）
 ICON_PIN = ('<svg viewBox="0 0 16 16" aria-hidden="true"><path d="M8 1.5a4.75 4.75 0 0 0-4.75 4.75c0 '
             '3.4 4.06 8.1 4.23 8.27a.75.75 0 0 0 1.04 0c.17-.17 4.23-4.87 4.23-8.27A4.75 4.75 0 0 0 8 '
             '1.5zm0 6.5a1.75 1.75 0 1 1 0-3.5 1.75 1.75 0 0 1 0 3.5z"/></svg>')
 ICON_COIN = ('<svg viewBox="0 0 16 16" aria-hidden="true"><path d="M8 1a7 7 0 1 0 0 14A7 7 0 0 0 8 1zm'
              '2.9 4.1l-1.9 2.4h1.6v.9H8.55v.8h2.05v.9H8.55V12H7.45v-1.9H5.4v-.9h2.05v-.8H5.4v-.9H7L5.1 '
              '5.1l.8-.6L8 6.8l2.1-2.3.8.6z"/></svg>')
+ICON_ARROW = ('<svg viewBox="0 0 16 16" aria-hidden="true"><path d="M8.7 2.29a1 1 0 0 0-1.41 1.42L10.59 7H2a1 '
+              '1 0 1 0 0 2h8.59l-3.3 3.29a1 1 0 0 0 1.41 1.42l5-5a1 1 0 0 0 0-1.42l-5-5z"/></svg>')
+ICON_CAL = ('<svg viewBox="0 0 16 16" aria-hidden="true"><path d="M5 1a1 1 0 0 1 1 1v1h4V2a1 1 0 1 1 2 0v1h.5A2.5 '
+            '2.5 0 0 1 15 5.5v8A2.5 2.5 0 0 1 12.5 16h-9A2.5 2.5 0 0 1 1 13.5v-8A2.5 2.5 0 0 1 3.5 3H4V2a1 '
+            '1 0 0 1 1-1zM3 7v6.5c0 .28.22.5.5.5h9a.5.5 0 0 0 .5-.5V7H3z"/></svg>')
+ICON_CARET = ('<svg viewBox="0 0 16 16" aria-hidden="true"><path d="M8 10.6 3.6 6.2l1.1-1.1L8 8.4l3.3-3.3 '
+              '1.1 1.1z"/></svg>')
 
 JS = """
 (function(){
@@ -251,25 +326,66 @@ JS = """
   var h=(location.hash||'').replace('#p','');
   select(h==='1'?1:0);
 
+  // 把标签栏的实际高度写进 CSS 变量，筛选条吸顶时才能严丝合缝地贴在它下面
+  var shell=document.querySelector('.tabshell');
+  function syncTabH(){
+    if(shell) root.style.setProperty('--tab-h', shell.offsetHeight+'px');
+  }
+  syncTabH();
+  window.addEventListener('resize', syncTabH);
+
+  // 兜底：少数移动端浏览器对 position:sticky 支持不佳（手机反馈过「电脑上固定、手机上不固定」）。
+  // 滚动时检测标签栏是否真的吸住了：该吸顶却跟着页面滚走，就改用 fixed + 等高占位元素兜底。
+  (function(){
+    if(!shell) return;
+    var ph=document.createElement('div');
+    ph.className='tabshell-ph';
+    shell.parentNode.insertBefore(ph, shell);
+    var stuck=false;
+    function stick(){
+      stuck=true;
+      ph.style.height=shell.offsetHeight+'px';
+      shell.classList.add('js-stuck');
+      syncTabH();
+    }
+    function unstick(){
+      stuck=false;
+      shell.classList.remove('js-stuck');
+      ph.style.height='0px';
+      syncTabH();
+    }
+    function check(){
+      if(stuck){
+        var phTop=ph.getBoundingClientRect().top+window.pageYOffset;
+        if(window.pageYOffset<=phTop+1) unstick();
+        return;
+      }
+      // sticky 生效时 top 恒为 0；滚出明显负值说明它没吸住
+      if(shell.getBoundingClientRect().top < -8) stick();
+    }
+    window.addEventListener('scroll', check, {passive:true});
+    window.addEventListener('resize', check);
+    check();
+  })();
+
   function panelOf(el){
     var p=el;
     while(p && p.classList && !p.classList.contains('panel')) p=p.parentElement;
     return p;
   }
-  function applyFilter(btn){
-    var group=btn.parentNode;
-    [].slice.call(group.querySelectorAll('[data-filter]')).forEach(function(b){
-      b.classList.toggle('on', b===btn);
-    });
-    var f=btn.getAttribute('data-filter');
-    var panel=panelOf(group);
+
+  // 统一的显示计算：日历选了日期就以日期为准，否则按「未过期 / 全部 / 已过期」
+  function applyState(panel){
     if(!panel) return;
+    var btn=panel.querySelector('[data-filter].on') || panel.querySelector('[data-filter]');
+    var f=btn?btn.getAttribute('data-filter'):'active';
+    var sel=panel.getAttribute('data-cal-date') || '';
     var any=false;
     [].slice.call(panel.querySelectorAll('[data-status]')).forEach(function(el){
       var st=el.getAttribute('data-status');
-      var show = (f==='all') ? true
-               : (f==='expired') ? (st==='expired')
-               : (st!=='expired');
+      var show;
+      if(sel) show = (el.getAttribute('data-date')===sel);
+      else show = (f==='all') ? true : (f==='expired') ? (st==='expired') : (st!=='expired');
       el.style.display = show ? '' : 'none';
       if(show) any=true;
     });
@@ -278,19 +394,189 @@ JS = """
                .filter(function(e){return e.style.display!=='none';});
       bl.style.display = vis.length ? '' : 'none';
     });
+    // 日历筛选中时状态按钮不可用，避免两个维度互相干扰
+    [].slice.call(panel.querySelectorAll('[data-filter]')).forEach(function(b){
+      b.classList.toggle('disabled', !!sel);
+    });
     var tip=panel.querySelector('.filter-empty');
-    if(tip) tip.style.display = any ? 'none' : '';
+    if(tip){
+      tip.style.display = any ? 'none' : '';
+      tip.textContent = sel ? '这一天没有符合条件的场次。' : '当前筛选条件下没有场次。';
+    }
+    // 实时回写「当前显示 N 场」：总览里一个日期块含多场，相关面板里一张卡片算一家
+    var cnt=panel.querySelector('[data-show-count]');
+    if(cnt){
+      var n=0;
+      [].slice.call(panel.querySelectorAll('[data-status]')).forEach(function(el){
+        if(el.style.display==='none') return;
+        var inner=el.querySelectorAll('.li');
+        n += inner.length ? inner.length : 1;
+      });
+      cnt.textContent = n;
+    }
+  }
+
+  // 以代码方式切到某个状态筛选（顶部统计卡跳转用）
+  function activateFilter(panel, f){
+    if(!panel) return;
+    var btn=panel.querySelector('[data-filter="'+f+'"]');
+    if(!btn) return;
+    var group=btn.parentNode;
+    [].slice.call(group.querySelectorAll('[data-filter]')).forEach(function(b){
+      b.classList.toggle('on', b===btn);
+    });
+    // 状态筛选与日历日期筛选互斥：跳转时先清掉已选日期，否则日期筛选会压住状态筛选
+    panel.removeAttribute('data-cal-date');
+    if(panel.__calDraw) panel.__calDraw();
+    applyState(panel);
   }
 
   document.querySelectorAll('[data-filter]').forEach(function(btn){
-    btn.addEventListener('click',function(){applyFilter(btn);});
+    btn.addEventListener('click',function(){
+      if(btn.classList.contains('disabled')) return;
+      var group=btn.parentNode;
+      [].slice.call(group.querySelectorAll('[data-filter]')).forEach(function(b){
+        b.classList.toggle('on', b===btn);
+      });
+      applyState(panelOf(group));
+    });
+  });
+
+  // 顶部统计卡：点哪张就跳到对应的面板与筛选结果
+  document.querySelectorAll('[data-goto]').forEach(function(card){
+    card.addEventListener('click',function(){
+      var g=card.getAttribute('data-goto');
+      var panel;
+      if(g==='relevant'){
+        select(1);
+        panel=panels[1];
+        activateFilter(panel,'all');   // 「58 家」是全量，故看全部而非仅未过期
+      }else{
+        select(0);
+        panel=panels[0];
+        activateFilter(panel,g);
+      }
+      var bar=panel.querySelector('.bar');
+      if(bar) bar.scrollIntoView({behavior:'smooth',block:'start'});
+    });
   });
 
   // 初始状态：默认只显示未过期，无需手动筛选
-  [].slice.call(document.querySelectorAll('.panel')).forEach(function(panel){
+  panels.forEach(function(panel){
     var def=panel.querySelector('[data-filter].on') || panel.querySelector('[data-filter]');
-    if(def) applyFilter(def);
+    if(def) applyState(panel);
   });
+
+  // ---------------- 按日历筛选 ----------------
+  var WEEK=['日','一','二','三','四','五','六'];
+  function pad(n){ return (n<10?'0':'')+n; }
+
+  function initCal(box){
+    var panel=panelOf(box);
+    if(!panel) return;
+    var grid=box.querySelector('[data-cal-grid]');
+    var ymEl=box.querySelector('[data-cal-ym]');
+    var selEl=box.querySelector('[data-cal-sel]');
+    var clearBtn=box.querySelector('[data-cal-clear]');
+    var prev=box.querySelector('[data-cal-prev]');
+    var next=box.querySelector('[data-cal-next]');
+
+    // 从已渲染的场次里收集「哪些日期有场次」与当天场次数
+    var map={};
+    [].slice.call(panel.querySelectorAll('[data-date]')).forEach(function(el){
+      var d=el.getAttribute('data-date');
+      if(!d) return;
+      map[d]=(map[d]||0)+1;
+    });
+    var keys=Object.keys(map).sort();
+    if(!keys.length){ box.style.display='none'; return; }
+
+    var now=new Date();
+    var today=now.getFullYear()+'-'+pad(now.getMonth()+1)+'-'+pad(now.getDate());
+    var min=keys[0].slice(0,7), max=keys[keys.length-1].slice(0,7);
+    var ym=(today.slice(0,7)>=min && today.slice(0,7)<=max) ? today.slice(0,7) : min;
+
+    function label(ds){ return (+ds.slice(5,7))+'月'+(+ds.slice(8,10))+'日'; }
+
+    function shift(n){
+      var y=+ym.slice(0,4), mo=+ym.slice(5,7)+n;
+      if(mo<1){ mo=12; y--; }
+      if(mo>12){ mo=1; y++; }
+      var ny=y+'-'+pad(mo);
+      if(ny<min || ny>max) return;
+      ym=ny; draw();
+    }
+
+    function draw(){
+      var y=+ym.slice(0,4), mo=+ym.slice(5,7);
+      var first=new Date(y, mo-1, 1).getDay();
+      var days=new Date(y, mo, 0).getDate();
+      var sel=panel.getAttribute('data-cal-date') || '';
+      var out=[];
+      for(var w=0;w<7;w++) out.push('<div class="cal-w">'+WEEK[w]+'</div>');
+      for(var b=0;b<first;b++) out.push('<div class="cal-d blank"></div>');
+      for(var d=1;d<=days;d++){
+        var ds=y+'-'+pad(mo)+'-'+pad(d);
+        var n=map[ds]||0;
+        var cls='cal-d'+(n?' has':'')+(ds===sel?' sel':'')+(ds===today?' today':'');
+        var inner=d+(n>1?'<i class="cal-n">'+n+'</i>':'');
+        out.push(n
+          ? '<div class="'+cls+'" data-day="'+ds+'" title="'+label(ds)+'　'+n+' 场招聘会">'+inner+'</div>'
+          : '<div class="'+cls+'">'+inner+'</div>');
+      }
+      grid.innerHTML=out.join('');
+      ymEl.textContent=y+'年'+mo+'月';
+      prev.disabled = (ym<=min);
+      next.disabled = (ym>=max);
+      if(sel){
+        selEl.textContent='只看 '+label(sel);
+        selEl.classList.add('on');
+        clearBtn.hidden=false;
+      }else{
+        selEl.textContent='全部日期';
+        selEl.classList.remove('on');
+        clearBtn.hidden=true;
+      }
+    }
+
+    grid.addEventListener('click',function(e){
+      var t=e.target.closest ? e.target.closest('[data-day]') : null;
+      if(!t) return;
+      var ds=t.getAttribute('data-day');
+      if((panel.getAttribute('data-cal-date')||'')===ds) panel.removeAttribute('data-cal-date');
+      else panel.setAttribute('data-cal-date', ds);
+      draw(); applyState(panel);
+    });
+    prev.addEventListener('click',function(){ shift(-1); });
+    next.addEventListener('click',function(){ shift(1); });
+    clearBtn.addEventListener('click',function(){
+      panel.removeAttribute('data-cal-date'); draw(); applyState(panel);
+    });
+
+    // 默认收起，点标题栏展开/收起；导航与清除按钮的点击不触发折叠
+    var hd=box.querySelector('[data-cal-toggle]');
+    function setCollapsed(c){
+      box.classList.toggle('collapsed', c);
+      hd.setAttribute('aria-expanded', c?'false':'true');
+    }
+    hd.addEventListener('click',function(){
+      setCollapsed(!box.classList.contains('collapsed'));
+    });
+    hd.addEventListener('keydown',function(e){
+      if(e.key==='Enter' || e.key===' '){
+        e.preventDefault();
+        setCollapsed(!box.classList.contains('collapsed'));
+      }
+    });
+    [prev,next,clearBtn].forEach(function(b){
+      b.addEventListener('click',function(e){ e.stopPropagation(); });
+    });
+
+    panel.__calDraw=draw;   // 暴露给统计卡跳转，便于同步「只看某天」的显示状态
+    draw();
+  }
+
+  document.querySelectorAll('[data-cal]').forEach(initCal);
 })();
 """
 
@@ -314,7 +600,7 @@ def _day_label(date_str: str) -> str:
 
 
 _SALARY_KW = re.compile(r"(薪资|薪酬|年薪|月薪|待遇|工资)")
-_NUM_UNIT = re.compile(r"\d+\s*[-~—–]?\s*\d*\s*(?:万\s*/?\s*年|万元|万|元\s*/\s*月|元\s*/\s*年|[kKwW])")
+_NUM_UNIT = re.compile(r"\d+\s*[-~—–－～]?\s*\d*\s*(?:万\s*/?\s*年|万元|万|元\s*/\s*月|元\s*/\s*年|[kKwW])")
 _SALARY_TABLE_LABEL = {"薪资", "薪资待遇", "月薪", "年薪", "薪酬"}
 
 
@@ -343,28 +629,33 @@ def extract_salary(desc: str) -> str:
                 elif vals:
                     break
             if vals:
-                return " / ".join(vals[:3])
+                out = [clean_leading_marks(v) for v in vals[:3]]
+                return " / ".join(x for x in out if x)
 
     for raw in lines:
-        line = raw.strip(" ●·|\t").strip()
+        # 先剥掉行首序号/符号，再定位薪资关键词，避免窗口切在「1.1」中间留下半截序号
+        line = clean_leading_marks(raw.strip(" ●·|\t").strip())
         if len(line) < 6:
             continue
         kw = _SALARY_KW.search(line)
         if not kw or not _NUM_UNIT.search(line):
             continue
         seg = re.split(r"[。；;]", line)[0].strip(" ，,、")
-        # 从薪资关键词处起截取，去掉「1、实行试用期制度，试用期6个月，」这类铺垫前缀
+        # 从薪资关键词处起截取，去掉「实行试用期制度，试用期6个月，」这类铺垫前缀
         start = kw.start()
         if _NUM_UNIT.search(seg[start:]) and len(seg[start:]) >= 8:
-            # 保留关键词前的极短定语（如「综合」「转正」），最多往前取 6 字
+            # 只保留紧邻关键词的中文定语（「综合」「转正」「税前」），最多 6 字；
+            # 标点、序号、上一句的尾巴一律丢掉
             head = seg[max(0, start - 6):start]
-            cut = max(head.rfind("，"), head.rfind(","), head.rfind("、"))
-            seg = head[cut + 1:] + seg[start:]
+            m = re.search(r"[\u4e00-\u9fff]+$", head)
+            seg = (m.group(0) if m else "") + seg[start:]
         if len(seg) > 60:
             seg = seg[:60].rstrip(" ，,、") + "…"
         if not _NUM_UNIT.search(seg):
             continue  # 「薪酬待遇优厚」这类空话，数字在别的分句里，宁缺毋滥
-        return seg
+        seg = clean_leading_marks(seg)
+        if seg:
+            return seg
     return ""
 
 
@@ -399,21 +690,51 @@ class Generator:
         return buckets
 
     @staticmethod
-    def _filter_bar(hint: str) -> str:
-        """筛选条。默认选中「未过期」，进页面即可直接看到有效场次。"""
+    def _filter_bar(hint: str, unit: str = "场") -> str:
+        """筛选条。默认选中「未过期」，进页面即可直接看到有效场次；右侧实时显示当前条数。"""
         return (
             '<div class="bar">'
             '<button class="fbtn on" data-filter="active">未过期</button>'
             '<button class="fbtn" data-filter="all">全部</button>'
             '<button class="fbtn" data-filter="expired">已过期</button>'
-            f'<span class="fhint">{esc(hint)}</span>'
+            f'<span class="fhint">当前显示 <b data-show-count>0</b> {esc(unit)}'
+            f"　·　{esc(hint)}</span>"
+            "</div>"
+        )
+
+    @staticmethod
+    def _calendar() -> str:
+        """
+        按日历筛选组件（骨架，日期格由页面内的 JS 依实际场次渲染）。
+        默认收起，点标题栏展开；有场次的日期带红点，点击即只看当天；月份可左右翻页。
+        """
+        return (
+            '<div class="calfilter collapsed" data-cal>'
+            '<div class="cal-hd" data-cal-toggle role="button" tabindex="0" aria-expanded="false">'
+            f'<span class="cal-ic">{ICON_CAL}</span>'
+            '<span class="cal-tt">按日历筛选</span>'
+            f'<span class="cal-caret">{ICON_CARET}</span>'
+            '<span class="cal-sel" data-cal-sel>全部日期</span>'
+            '<button type="button" class="cal-clear" data-cal-clear hidden>清除</button>'
+            '<span class="cal-navs">'
+            '<button type="button" class="cal-nav" data-cal-prev title="上个月">‹</button>'
+            '<b class="cal-ym" data-cal-ym></b>'
+            '<button type="button" class="cal-nav" data-cal-next title="下个月">›</button>'
+            "</span>"
+            "</div>"
+            '<div class="cal-body">'
+            '<div class="cal-grid" data-cal-grid></div>'
+            '<div class="cal-tip">点带 <b>●</b> 的日期，只看当天场次；再点一次取消，'
+            "红点数字为当天场次数。</div>"
+            "</div>"
             "</div>"
         )
 
     def _overview(self, fairs: List[Dict[str, Any]], months: List[str]) -> str:
         buckets = self.group_by_month(fairs)
         parts: List[str] = []
-        parts.append(self._filter_bar("默认只显示未过期场次，已过期的可切换到「全部」或「已过期」查看"))
+        parts.append(self._filter_bar("默认只看未过期，可切换「全部」或「已过期」"))
+        parts.append(self._calendar())
         parts.append('<div class="filter-empty" style="display:none">当前筛选条件下没有场次。</div>')
 
         for key in months:
@@ -430,7 +751,8 @@ class Generator:
                     past = rows[0]["status"] == "expired"
                     cls = "day past" if past else "day"
                     parts.append(
-                        f'<div class="{cls}" data-status="{esc(rows[0]["status"])}">'
+                        f'<div class="{cls}" data-status="{esc(rows[0]["status"])}" '
+                        f'data-date="{esc(day)}">'
                         f'<div class="day-hd"><span class="d">{esc(_day_label(day))}</span>'
                         f'<span class="w">{esc(rows[0].get("weekday",""))}</span>'
                         f'<span class="cnt">{len(rows)} 场 · {esc(rows[0]["status_label"])}</span></div>'
@@ -438,17 +760,21 @@ class Generator:
                     for r in rows:
                         link = self.config["site"]["detail_url"].format(id=r["id"])
                         salary = extract_salary(r.get("description", ""))
-                        pay_html = (f'<div><span class="pay">{ICON_COIN}{esc(salary)}</span></div>'
+                        # 单位名与简章按钮并列一行；薪资较长，单独放在单位名下方一行
+                        pay_html = (f'<span class="pay">{ICON_COIN}{esc(salary)}</span>'
                                     if salary else "")
                         parts.append(
                             '<div class="li">'
+                            '<div class="tcol">'
                             f'<div class="t">{esc(r["time"])}</div>'
+                            f'<div class="vn">{ICON_PIN}{esc(r["venue"])}</div>'
+                            "</div>"
                             '<div class="bd">'
                             f'<div class="co">{esc(r["theme"])}</div>'
-                            f'<div class="vn">{ICON_PIN}{esc(r["venue"])}</div>'
+                            '<div class="lk">'
+                            f'<a class="brief" href="{esc(link)}" target="_blank" rel="noopener">'
+                            f"查看官方简章{ICON_ARROW}</a></div>"
                             f"{pay_html}"
-                            f'<div class="lk"><a href="{esc(link)}" target="_blank" rel="noopener">'
-                            "查看官方简章 →</a></div>"
                             "</div>"
                             f'<div class="st st-{esc(r["status"])}">{esc(r["status_label"])}</div>'
                             "</div>"
@@ -479,7 +805,8 @@ class Generator:
             parts.append(f'<div class="empty">当前区间内没有与画像匹配的招聘会。每日 {esc(self.daily_at)} 会自动重新抓取并更新。</div>')
             return "".join(parts)
 
-        parts.append(self._filter_bar("默认只显示未过期场次；已过期但仍想参考的可切换到「全部」"))
+        parts.append(self._filter_bar("默认只看未过期；已过期但仍想参考的可切换「全部」", unit="家"))
+        parts.append(self._calendar())
         parts.append('<div class="filter-empty" style="display:none">当前筛选条件下没有匹配项。</div>')
 
         tier_meta = {1: ("强相关", "t1"), 2: ("相关", "t2"), 3: ("沾边", "t3")}
@@ -491,12 +818,21 @@ class Generator:
             for idx, s in enumerate(group, 1):
                 past = s["status"] == "expired"
                 card_cls = f"card t{cls}" + (" past" if past else "")
-                parts.append(f'<div class="{card_cls}" data-status="{esc(s["status"])}">')
+                salary = extract_salary(s.get("description", ""))
+                pay_html = (f'<span class="pay">{ICON_COIN}{esc(salary)}</span>'
+                            if salary else "")
+                link = self.config["site"]["detail_url"].format(id=s["id"])
+                parts.append(f'<div class="{card_cls}" data-status="{esc(s["status"])}" '
+                             f'data-date="{esc(s["date"])}">')
+                # 单位名与查看简章一行；薪资、时间+地点各占一行
                 parts.append('<div class="card-hd">'
                              f'<span class="rank {cls}">{idx}</span>'
                              f'<span class="co">{esc(s["theme"])}</span>'
-                             f'<span class="when">{esc(_day_label(s["date"]))} {esc(s["time"])}</span>'
+                             f'<a class="brief" href="{esc(link)}" target="_blank" rel="noopener">'
+                             f"查看官方简章{ICON_ARROW}</a>"
                              "</div>")
+                if pay_html:
+                    parts.append(pay_html)
 
                 badges = [f'<span class="badge b-score">{s["score"]} 分</span>']
                 badges.append(f'<span class="badge {"b-lo" if past else "b-hi"}">{esc(s["status_label"])}</span>')
@@ -509,7 +845,11 @@ class Generator:
                 if s.get("edu_hits"):
                     badges.append(f'<span class="badge b-edu">学历：{esc("、".join(s["edu_hits"][:2]))}</span>')
                 parts.append(f'<div class="row"><div class="k">匹配</div><div class="v">{"".join(badges)}</div></div>')
-                parts.append(f'<div class="row"><div class="k">地点</div><div class="v">{esc(s["venue"])}</div></div>')
+                # 时间在左、地点在右，同一行
+                parts.append('<div class="row when-place">'
+                             f'<span class="when">{esc(_day_label(s["date"]))} {esc(s["time"])}</span>'
+                             f'<span class="place">{ICON_PIN}{esc(s["venue"])}</span>'
+                             "</div>")
 
                 ev = "".join(f"<div>· {esc(x)}</div>" for x in s["major_evidence"][:2])
                 if ev:
@@ -520,9 +860,6 @@ class Generator:
                 if s["note"]:
                     parts.append(f'<div class="ev warn"><span class="t">提示</span>{esc(s["note"])}</div>')
 
-                link = self.config["site"]["detail_url"].format(id=s["id"])
-                parts.append(f'<div class="row"><div class="k"></div><div class="v">'
-                             f'<a href="{esc(link)}" target="_blank" rel="noopener">查看官方简章 →</a></div></div>')
                 parts.append("</div>")
             parts.append("</div>")
         return "".join(parts)
@@ -566,13 +903,6 @@ class Generator:
         author = self.config["site"].get("author", "")
         repo_url = links.get("repo", "")
         pages_url = links.get("pages", "")
-        link_html = ""
-        if pages_url:
-            link_html += (f'<a class="primary" href="{esc(pages_url)}" target="_blank" rel="noopener">'
-                          f'{ICON_PAGE}<span>GitHub 原始页面</span></a>')
-        if repo_url:
-            link_html += (f'<a class="ghost" href="{esc(repo_url)}" target="_blank" rel="noopener">'
-                          f'{ICON_GITHUB}<span>源代码仓库</span></a>')
 
         return (
             '<!DOCTYPE html><html lang="zh-CN" class="nojs">'
@@ -585,20 +915,23 @@ class Generator:
             f"<style>{CSS}</style></head><body><div class=\"wrap\">"
             f"<header><h1>{esc(self.config['site']['name'])}</h1>"
             f"<div class=\"meta\">统计区间 <code>{esc(rng['start'])} ~ {esc(rng['end'])}</code>　·　"
-            f"数据更新 <code>{esc(now)}</code>　·　每日 <code>02:00</code> 自动更新"
+            f"数据更新 <code>{esc(now)}</code>　·　每日 <code>{esc(self.daily_at)}</code> 自动更新"
             + (f"　·　作者 <code>{esc(author)}</code>" if author else "") + "<br>"
             "来源：<a href=\"" + esc(self.config["site"]["calendar_url"]) +
-            "\" target=\"_blank\" rel=\"noopener\">ahut.ahbys.com 招聘日历</a></div>"
-            f'<div class="links">{link_html}</div></header>'
-            "<div class=\"stats\">"
-            f"<div class=\"stat hl\"><div class=\"n\">{total}<small>场</small></div>"
-            "<div class=\"l\">区间内总场次</div></div>"
-            f"<div class=\"stat ok\"><div class=\"n\">{upcoming}<small>场</small></div>"
-            "<div class=\"l\">未过期</div></div>"
-            f"<div class=\"stat ex\"><div class=\"n\">{expired}<small>场</small></div>"
-            "<div class=\"l\">已过期（可切换查看）</div></div>"
-            f"<div class=\"stat\"><div class=\"n\">{matched}<small>家</small></div>"
-            "<div class=\"l\">与我相关</div></div>"
+            "\" target=\"_blank\" rel=\"noopener\">ahut.ahbys.com 招聘日历</a></div></header>"
+            '<div class="stats">'
+            f'<button type="button" class="stat hl" data-goto="all" title="查看区间内全部 {total} 场">'
+            f'<span class="n">{total}<small>场</small></span>'
+            '<span class="l">区间内总场次<span class="go">点击查看 ›</span></span></button>'
+            f'<button type="button" class="stat ok" data-goto="active" title="查看未过期场次">'
+            f'<span class="n">{upcoming}<small>场</small></span>'
+            '<span class="l">未过期<span class="go">点击查看 ›</span></span></button>'
+            f'<button type="button" class="stat ex" data-goto="expired" title="查看已过期场次">'
+            f'<span class="n">{expired}<small>场</small></span>'
+            '<span class="l">已过期<span class="go">点击查看 ›</span></span></button>'
+            f'<button type="button" class="stat" data-goto="relevant" title="查看与我相关的单位">'
+            f'<span class="n">{matched}<small>家</small></span>'
+            '<span class="l">与我相关<span class="go">点击查看 ›</span></span></button>'
             "</div>"
             '<div class="tabshell"><div class="tabs">'
             f'<button class="tab" aria-selected="true">招聘会总览'

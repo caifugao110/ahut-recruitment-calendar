@@ -29,11 +29,15 @@
 | 特性 | 说明 |
 | --- | --- |
 | 🗓 **区间全量抓取** | 追踪区间在 `config/config.json` 的 `profile.fair_range`（当前 2026-09-01 ~ 2026-12-31）；先用日历「红点」接口缩小范围，接口覆盖不到的月份自动退化为逐日扫描，保证不漏 |
+| 📅 **页面内按日历筛选** | 页面内置月历（默认收起，点标题栏展开），有场次的日期带红点（数字为当天场次数），点一下只看当天场次，可翻月、可一键清除；「当前显示 N 场」实时回写 |
+| 🖱 **统计卡直达筛选** | 顶部四张统计卡（总场次 / 未过期 / 已过期 / 与我相关）可直接点击，跳到对应面板与筛选结果 |
+| 📌 **标签栏与筛选条吸顶** | 向下翻场次时标签栏与筛选条固定在顶部（筛选条的吸顶位置由 JS 实测标签栏高度回写，不会错位），随时能切面板或改筛选。刻意不用毛玻璃背景并带 JS 兜底，移动端浏览器（Safari 内核 / 微信 X5）也不会失效 |
 | 📄 **深入招聘简章** | 不只抓标题列表，还抓每场招聘会的完整简章，从中识别需求专业、学历门槛与工作地点 |
+| 💰 **薪资待遇提炼** | 从简章里摘出薪资那一句，展示在「查看官方简章」按钮下方；自动剥掉原文的行首序号（`1.` / `2、` / `①` / `1.1`）与项目符号（`？` `●`），摘出来单看不再出现「只有一条却写着 2.」 | |
 | 🎯 **画像驱动匹配** | 专业 / 学历 / 城市 / 权重 / 阈值全部配置化，换成任何人的画像都不用改代码 |
 | 🔍 **匹配有据可查** | 每家单位展示命中的专业、城市、学历标签，并附上简章原文片段，不靠公司名猜测 |
 | ♻️ **过期不删除** | 当天之前的场次照常保留，仅标记「已过期」灰显；默认筛选只显示未过期 |
-| ⏰ **每日定时自动更新** | 更新时间在 `profile.schedule.daily_at`（默认 02:00，北京时间），GitHub Actions 到点自动抓取、提交数据、重建并发布 |
+| ⏰ **每日定时自动更新** | 更新时间在 `profile.schedule.daily_at`（默认 02:00，北京时间）。抓取在境内云函数完成（约 46 秒），GitHub Actions 只负责生成与发布，见 [scf/README.md](./scf/README.md) |
 | 🧠 **增量抓取** | 招聘简章按 ID 缓存到 `data/cache/`，重复运行只抓新增场次 |
 | 📦 **纯静态产物** | 输出 `index.html` + `data.json` + `favicon.svg`，可托管到任意静态空间 |
 
@@ -60,7 +64,7 @@ python scripts/daily_update.py
 | 命令 | 作用 |
 | --- | --- |
 | `python scripts/daily_update.py` | 完整更新：抓取 → 合并数据集 → 匹配 → 生成页面 |
-| `python scripts/daily_update.py --no-detail` | 跳过简章抓取，只拉场次列表（最快；不做画像匹配） |
+| `python scripts/daily_update.py --no-detail` | 跳过简章抓取，只拉场次列表（最快；匹配退化为按场次标题弱判断） |
 | `python scripts/daily_update.py --rebuild-cache` | 忽略 `data/cache/`，重新抓取全部简章 |
 | `python scripts/daily_update.py --from-dataset` | 不联网，直接用已有 `data/dataset.json` 重建页面（调画像参数时用） |
 | `python scripts/daily_update.py --config <路径>` | 指定其它配置文件（默认 `config/config.json`） |
@@ -68,6 +72,8 @@ python scripts/daily_update.py
 | `python scripts/publish.py` | 按配置里的站点 slug **定向更新**码上架站点（推荐） |
 | `python scripts/sync_workflow.py` | 把配置里的更新时间换算成 UTC cron 回填到 GitHub Actions |
 | `python scripts/sync_workflow.py --check` | 只校验 cron 是否与配置一致（CI 用，漂移即报错） |
+| `python scf/package.py --list` | 打包云函数（index.py + src/ + config/）成可上传的 zip |
+| `DRY_RUN=1 python scf/index.py` | 本地干跑云函数：真抓取、真合并，但不写仓库（Windows 用 `set DRY_RUN=1 && ...`） |
 
 ---
 
@@ -77,7 +83,7 @@ python scripts/daily_update.py
 .
 ├── .github/
 │   └── workflows/
-│       └── daily.yml            # GitHub Actions：每日抓取、提交数据、部署 Pages / 码上架
+│       └── daily.yml            # GitHub Actions：生成站点 + 部署 Pages / 码上架（抓取不在这里）
 ├── .env.example                 # 环境变量模板（凭据/部署地址，复制成 .env 后填写）
 ├── config/
 │   └── config.json              # ★ 唯一配置文件（数据源 + 个人画像 + 发布，全站就改这一个）
@@ -85,12 +91,18 @@ python scripts/daily_update.py
 │   ├── __init__.py
 │   ├── envfile.py               # 零依赖 .env 加载器（标准库实现）
 │   ├── scraper.py               # 抓取：日历红点 → 当日场次 → 招聘简章全文
+│   ├── dataset.py               # 数据集读写：合并 / 区间过滤 / 时间清洗（脚本与云函数共用）
 │   ├── matcher.py               # 匹配：按画像打分、抽取证据、标记过期状态
+│   ├── textutil.py              # 展示层清洗：剥掉简章片段行首的序号与项目符号
 │   └── generate.py              # 渲染：生成单页静态站点
 ├── scripts/                     # 命令行入口
 │   ├── daily_update.py          # 每日更新：抓取 → 合并 → 匹配 → 生成
 │   ├── publish.py               # 发布 site/ 到码上架（官方 CLI 的薄封装）
 │   └── sync_workflow.py         # 把更新时间同步成 GitHub Actions 的 cron
+├── scf/                         # 腾讯云函数：在境内抓取并回传数据（见 scf/README.md）
+│   ├── index.py                 # 云函数入口：抓取 → 合并 → 提交 dataset.json 到 GitHub
+│   ├── package.py               # 打成可上传到 SCF 的 zip
+│   └── README.md                # 建函数 / 环境变量 / 定时触发器的完整步骤
 ├── data/
 │   ├── dataset.json             # ★ 累计数据集（已过期场次永久保留，CI 增量提交到独立的 data 分支，主分支不动）
 │   ├── snapshot/                # 每日原始快照 YYYY-MM-DD.json（本地，不入库）
@@ -128,7 +140,8 @@ python scripts/daily_update.py
     "detail_url": "https://ahut.ahbys.com/Recruit.html?id={id}"
   },
   "links":  { "repo": "你的仓库地址", "pages": "你的 Pages 地址" },
-  "request": { "timeout": 30, "retries": 3, "delay_seconds": 0.15 },  // 限速/重试，请勿调高频率
+  "request": { "timeout": 10, "retries": 2, "delay_seconds": 0.15,
+               "user_agent": "Mozilla/5.0 ..." },  // 限速/重试，请勿调高频率
   "output":  { "site_dir": "site", "data_dir": "data", "index_name": "index.html" }
 }
 ```
@@ -249,27 +262,26 @@ copy .env.example .env      # Windows（macOS / Linux 用 cp .env.example .env�
 
 ## 🕑 每日定时更新（默认 02:00，北京时间）
 
-三种执行方式任选其一，区别在「谁在跑」：
+更新分两段，各放在最合适的地方跑：
 
-| 方式 | 谁在跑 | 电脑要开机吗 | 地址是否固定 | 成本 |
-| --- | --- | --- | --- | --- |
-| **GitHub Actions**（推荐） | GitHub 服务器 | ❌ | ✅ `*.github.io` 永久固定 | 免费 |
-| 自建服务器 cron | 你的 VPS | ❌ | 自己掌控 | 服务器费用 |
-| 本地定时 | 你的电脑 | ✅ | 取决于发布方式 | 免费 |
+| 阶段 | 在哪跑 | 干什么 | 耗时 |
+| --- | --- | --- | --- |
+| ① 抓数据 | 腾讯云函数（境内） | 抓取招聘会 → 提交 `data/dataset.json` | 约 46 秒 |
+| ② 出站点 | GitHub Actions（境外） | 生成页面 → 部署 Pages → 发布码上架 | 几十秒 |
 
-> GitHub Actions 的 `schedule` **不保证准点**，高峰可能延迟几分钟到半小时；
-> 需要严格准点请用自建服务器。
+**为什么要拆**：数据源 `ahut.ahbys.com` 在国内（安徽电信单机、无 CDN），
+GitHub 托管 runner 在境外，97 次请求跨洋要十几分钟；放进境内云函数后只要约 46 秒，
+跨洋环节从「97 次请求」压缩成「1 次提交」。
 
-### 方式 A：GitHub Actions（推荐）
+> 不拆也能跑：Actions 内直接抓取同样能出结果，只是每次十几分钟。
+> 拆开还有个好处 —— 云函数的定时触发器用**北京时间**，不用换算 UTC，
+> 也比 GitHub `schedule` 准点（后者高峰期可能延迟几分钟到半小时）。
 
-已内置 [.github/workflows/daily.yml](./.github/workflows/daily.yml)，每天在
-`profile.schedule.daily_at` 设定的时间（北京时间，默认 02:00）自动完成：
+### 方式 A：云函数 + GitHub Actions（推荐）
 
-1. 校验 cron 与配置是否一致；
-2. 抓取最新招聘会、合并进 `data/dataset.json`；
-3. 若数据有变化，自动提交并推送到独立的 `data` 分支（主分支保持只读、只存核心代码）；
-4. 重建站点并部署到 GitHub Pages；
-5. （可选）配置了码上架 Token 时同步发布到码上架。
+1. 按 [scf/README.md](./scf/README.md) 部署云函数：打包 → 建函数 → 填 `GITHUB_TOKEN` → 加定时触发器；
+2. 云函数到点抓取，通过 GitHub API 提交 `data/dataset.json`；
+3. push 事件触发 [daily.yml](./.github/workflows/daily.yml)：生成站点 → 部署 Pages → 发布码上架。
 
 一次性配置（仓库页面上点选）：
 
@@ -279,8 +291,15 @@ copy .env.example .env      # Windows（macOS / Linux 用 cp .env.example .env�
 
 之后每天到点自动运行；也可在 Actions 页面选 `daily-update` → **Run workflow** 手动触发。
 
-**修改每日更新时间**：GitHub Actions 只认写死在 yml 里的 UTC cron，不能直接读 JSON，
-改完配置后跑一次同步脚本并提交即可（CI 也会自动校验，忘记同步会直接报错提醒）：
+### 方式 B：只在 GitHub Actions 里跑（不用云函数）
+
+不想折腾云函数的话，把 daily.yml 生成站点那一步的 `--from-dataset` 去掉，
+就回到「Actions 内抓取」，代价是每次十几分钟（跨洋）且 schedule 可能延迟。
+
+**修改每日更新时间**：改完 `config/config.json -> profile.schedule.daily_at` 要同步两处 ——
+
+- GitHub Actions 的 UTC cron：跑一次 `python scripts/sync_workflow.py`（CI 会校验，忘记同步直接报错）
+- 云函数的定时触发器：在 SCF 控制台改（北京时间，不用换算）
 
 ```bash
 # 1) 改 config/config.json 里的 profile.schedule.daily_at，例如 "07:30"
@@ -291,7 +310,9 @@ git add config/config.json .github/workflows/daily.yml
 git commit -m "chore: 调整每日更新时间为 07:30"
 ```
 
-### 方式 B：自建服务器 cron
+下面几种方式是在本地 / 服务器上完整跑一遍（抓取 + 生成），适合不想上云函数的场景。
+
+### 方式 C：自建服务器 cron
 
 时间与 `profile.schedule.daily_at`（北京时间）保持一致：
 
@@ -303,13 +324,13 @@ git commit -m "chore: 调整每日更新时间为 07:30"
 0 2 * * * cd /srv/ahut-recruitment-calendar && python scripts/daily_update.py && python scripts/publish.py
 ```
 
-### 方式 C：本地定时（macOS / Linux）
+### 方式 D：本地定时（macOS / Linux）
 
 ```bash
 0 2 * * * cd /path/to/ahut-recruitment-calendar && python scripts/daily_update.py >> logs/daily.log 2>&1
 ```
 
-### 方式 C：本地定时（Windows 任务计划程序）
+### 方式 E：本地定时（Windows 任务计划程序）
 
 ```powershell
 # -At 后的时间对齐 profile.schedule.daily_at
@@ -422,13 +443,66 @@ python scripts/publish.py --mode anonymous   # 按目录匿名发布（地址不
 
 请求需带 `Referer` 与 `X-Requested-With` 头，返回 JSON。抓取策略：
 
-1. 先批量取未来 12 个月的日历红点，只对「有红点」的日期请求场次列表，大幅减少请求数；
+1. 先批量取追踪区间（`profile.fair_range`）内各月份的日历红点，只对「有红点」的日期请求场次列表，大幅减少请求数；
 2. 日历接口覆盖不到的月份（如已过去的月份）自动退化为**逐日扫描**兜底；
 3. 每场的简章按 `rid` 缓存，重复运行只抓新增；
-4. 每次请求间隔 0.15s，失败按指数退避重试 3 次。
+4. 每次请求间隔 0.15s，失败自动重试（次数由 `request.retries` 控制，重试间隔逐次加倍）。
 
 简章里的时间段写法五花八门（如 `2026年10月8日18:30-20:00`、全角冒号 `10：30`），
 `normalize_time()` 会统一清洗成 `18:30-20:00`。
+
+---
+
+## 📦 data.json 字段说明
+
+`site/data.json` 是页面的结构化数据（页面渲染与二次开发都基于它），顶层三个字段：
+
+| 字段 | 说明 |
+| --- | --- |
+| `updated_at` | 本次生成时间（ISO 格式） |
+| `total` | 区间内场次数 |
+| `fairs` | 场次明细数组，已按「未过期在前 → 分数降序 → 日期」排序 |
+
+`fairs[]` 的每个元素 = 抓取基础字段 + 状态字段 + 匹配字段：
+
+| 分组 | 字段 | 说明 |
+| --- | --- | --- |
+| 基础 | `id` / `theme` / `date` / `weekday` / `time` / `venue` | 场次 ID、主题、日期（YYYY-MM-DD）、星期、时间段、地点；`id` 可按 `site.detail_url` 拼出简章页地址 |
+| 基础 | `description` | 简章全文纯文本（抓取失败或 `--no-detail` 时为空） |
+| 状态 | `status` / `status_label` / `days_left` | `upcoming` / `today` / `expired`；中文标签（如「今天」「已过期 · 3天前」）；距今天数（负数为已过） |
+| 匹配 | `score` / `major_score` / `city_score` / `edu_score` | 总分与各维度分（总分 = 专业分 + 城市分 × `city_weight_ratio` + 学历分） |
+| 匹配 | `tier` / `tier_label` | 0~3 档位与中文标签（不相关 / 沾边 / 相关 / 强相关） |
+| 匹配 | `major_hits` / `city_hits` / `city_belt_hits` / `edu_hits` | 命中的专业 / 意向城市 / 通勤圈城市 / 学历关键词 |
+| 匹配 | `major_evidence` / `city_evidence` / `note` | 简章原文证据片段与一句话匹配说明（页面「匹配依据」展示的就是它们） |
+
+---
+
+## ❓ 常见问题（FAQ）
+
+**改了画像 / 权重 / 阈值，怎么立即看效果？**
+不用联网：`python scripts/daily_update.py --from-dataset` 直接用已有数据集重建页面。
+
+**页面数据为 0，或「与我相关」面板是空的？**
+依次检查：
+
+- `profile.fair_range` 是否覆盖目标日期，区间外的场次不会收录；
+- 本机能否直连 `ahut.ahbys.com`（境内单机源，境外网络可能超时）；
+- 是否用了 `--no-detail`：简章缺失时匹配退化为按场次标题弱判断，结果会明显变差。
+
+**GitHub Actions 到点没跑？**
+`schedule` 在高峰期可能延迟几分钟到半小时，属正常现象；确认 `Settings → Actions → General → Workflow permissions` 已选 **Read and write permissions**。推荐方式 A（云函数抓取 + push 触发生成），不依赖 schedule 准点。
+
+**Pages 打开还是旧内容？**
+Pages 部署完成有 1~2 分钟传播延迟，浏览器强制刷新（Ctrl+F5）即可。
+
+**码上架固定地址没更新？**
+大概率走了匿名 / 按目录发布——每次都会生成新地址。请用 `python scripts/publish.py` 定向更新配置里的 `publish.site` slug，内容才会落到固定地址。
+
+**码上架报 Token 校验失败？**
+「登录 Token」（`MASHANGJIA_LOGIN_TOKEN`）与「部署口令」（`MASHANGJIA_DEPLOY_TOKEN`）是两种不同凭据，格式校验不同，不能混用；控制台「API Token」页面生成的是**登录 Token**。
+
+**CI 里 sync_workflow 校验报错？**
+说明 `config.json` 的 `profile.schedule.daily_at` 与 daily.yml 的 cron 已经漂移。本地跑一次 `python scripts/sync_workflow.py` 回填后，把两个文件一起提交。
 
 ---
 
@@ -454,4 +528,4 @@ pip install pytest     # 运行测试（目前仓库未附带测试）
 
 ## 📜 License
 
-[MIT](./LICENSE) © 2026 AHUT Recruitment Calendar contributors
+[MIT](./LICENSE) © 2026 Tobin

@@ -23,6 +23,8 @@ import datetime as dt
 import re
 from typing import Any, Dict, List, Optional
 
+from src.textutil import clean_leading_marks
+
 SENTENCE_SPLIT = re.compile(r"[\n；;。]| \| ")
 
 
@@ -112,7 +114,8 @@ class Matcher:
             return []
         out: List[str] = []
         for seg in SENTENCE_SPLIT.split(text):
-            seg = _norm(seg)
+            # 展示前先剥掉行首的「2、」「？ 」这类序号与项目符号，页面上更干净
+            seg = clean_leading_marks(_norm(seg))
             if len(seg) < 6:
                 continue
             if any(k in seg for k in keywords):

@@ -2,9 +2,9 @@
   "_comment": "项目唯一配置文件，分四段：site/links/request/output = 数据源与产物；profile = 个人画像与定时；publish = 发布。改这一个文件即可，无需动代码。",
 
   "site": {
-    "_comment": "数据来源站点。页面是 JS 动态渲染的，实际数据走 api_path 指向的接口。",
+    "_comment": "数据来源站点。页面是 JS 动态渲染的，实际数据走 api_path 指向的接口。author 留空则页头/页脚都不显示作者。",
     "name": "安徽工业大学 · 招聘日历",
-    "author": "Tobin",
+    "author": "",
     "base_url": "https://ahut.ahbys.com",
     "calendar_url": "https://ahut.ahbys.com/RecruitCalendar.html",
     "api_path": "/API/Web/Recruit.ashx",
@@ -12,15 +12,15 @@
   },
 
   "links": {
-    "_comment": "页面页头/页脚展示的外链。fork 后改成自己的仓库与 Pages 地址。",
+    "_comment": "页面页脚展示的外链。fork 后改成自己的仓库与 Pages 地址；留空则页脚不显示对应链接。",
     "repo": "https://github.com/caifugao110/ahut-recruitment-calendar",
     "pages": "https://caifugao110.github.io/ahut-recruitment-calendar/"
   },
 
   "request": {
-    "_comment": "抓取限速与重试。delay_seconds 是每次请求的最小间隔，请勿调高频率影响对方服务。",
-    "timeout": 30,
-    "retries": 3,
+    "_comment": "抓取限速与重试。delay_seconds 是每次请求的最小间隔，请勿调高频率影响对方服务。timeout × retries + 退避 = 单次卡住的代价（当前约 20 秒），抓取是串行的会逐次累加，云函数有总超时，别调太大。",
+    "timeout": 10,
+    "retries": 2,
     "delay_seconds": 0.15,
     "user_agent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/124.0 Safari/537.36"
   },

@@ -30,10 +30,13 @@ from typing import Any, Dict, List
 ROOT = Path(__file__).resolve().parent.parent
 sys.path.insert(0, str(ROOT))
 
+from src.dataset import (  # noqa: E402
+    in_range, load_dataset, merge_dataset, normalize_dataset_times, save_dataset,
+)
 from src.envfile import apply_env_overrides, load_env_file  # noqa: E402
 from src.generate import Generator  # noqa: E402
 from src.matcher import Matcher, mark_status  # noqa: E402
-from src.scraper import Scraper, normalize_time  # noqa: E402
+from src.scraper import Scraper  # noqa: E402
 
 
 def load_json(path: Path) -> Dict[str, Any]:
@@ -45,25 +48,6 @@ def save_json(path: Path, data: Any) -> None:
     path.parent.mkdir(parents=True, exist_ok=True)
     with path.open("w", encoding="utf-8") as f:
         json.dump(data, f, ensure_ascii=False, indent=2)
-
-
-def merge_dataset(dataset: Dict[str, Dict[str, Any]], fresh: List[Dict[str, Any]]) -> int:
-    """按 ID 合并新数据；返回新增条数。已存在的条目用最新内容覆盖。"""
-    added = 0
-    for item in fresh:
-        rid = item["id"]
-        if rid not in dataset:
-            added += 1
-        dataset[rid] = item
-    return added
-
-
-def in_range(date_str: str, start: dt.date, end: dt.date) -> bool:
-    try:
-        d = dt.date.fromisoformat(date_str[:10])
-    except (ValueError, TypeError):
-        return False
-    return start <= d <= end
 
 
 def main() -> int:
@@ -106,8 +90,7 @@ def main() -> int:
 
     if args.from_dataset:
         print("[1/5] 跳过抓取，直接读取已有数据集 ...")
-        if dataset_path.exists():
-            dataset = {x["id"]: x for x in json.loads(dataset_path.read_text(encoding="utf-8"))}
+        dataset = load_dataset(dataset_path)
         print(f"      数据集共 {len(dataset)} 场")
         added = 0
     else:
@@ -118,19 +101,14 @@ def main() -> int:
         snapshot_dir = ROOT / config["output"]["data_dir"] / "snapshot"
         save_json(snapshot_dir / f"{dt.date.today().isoformat()}.json", fairs)
 
-        if dataset_path.exists():
-            try:
-                dataset = {x["id"]: x for x in json.loads(dataset_path.read_text(encoding="utf-8"))}
-            except (json.JSONDecodeError, KeyError):
-                dataset = {}
+        dataset = load_dataset(dataset_path)
         added = merge_dataset(dataset, fairs)
 
-    all_fairs = [v for v in dataset.values() if in_range(v.get("date", ""), start, end)]
     # 历史条目可能还留着 "2026年10月8日18:30-20:00" 这类旧写法，统一清洗成 "18:30-20:00"
-    for item in all_fairs:
-        item["time"] = normalize_time(item.get("time", ""))
+    normalize_dataset_times(dataset, start, end)
+    all_fairs = [v for v in dataset.values() if in_range(v.get("date", ""), start, end)]
     all_fairs.sort(key=lambda x: (x["date"], x["time"], x["theme"]))
-    save_json(dataset_path, list(dataset.values()))
+    save_dataset(dataset_path, dataset)
     print(f"[2/5] 合并数据集：新增 {added} 场，区间内累计 {len(all_fairs)} 场")
 
     print("[3/5] 标记过期状态 ...")

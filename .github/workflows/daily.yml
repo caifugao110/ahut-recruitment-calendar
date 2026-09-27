@@ -1,6 +1,21 @@
-# 每天在 config/config.json -> profile.schedule.daily_at 设定的时间（北京时间，默认 02:00）
-# 于 GitHub 服务器上自动抓取招聘会并重新发布站点。
-# 改完时间记得运行 `python scripts/sync_workflow.py` 把下面的 cron 同步过来（CI 也会校验）。
+# 本工作流只负责「生成站点 + 部署发布」，抓取已搬到境内的腾讯云函数（见 scf/README.md）。
+#
+# 为什么拆开：
+#   数据源 ahut.ahbys.com 在国内（安徽电信单机、无 CDN），GitHub 托管 runner 在境外，
+#   97 次请求跨洋要十几分钟；放进境内云函数后只要约 46 秒，
+#   跨洋环节从「97 次请求」压缩成「云函数提交 dataset.json」这 1 次。
+#
+# 触发方式（三条，前两条可能撞车，用 concurrency 排队）：
+#   A. push data/dataset.json —— 主链路。云函数抓完提交后自动触发本工作流。
+#   B. schedule              —— 兜底。云函数万一没跑，每天仍会用已有数据重建一次站点。
+#   C. workflow_dispatch      —— Actions 页面手动触发。
+#
+# ★ 重要：本工作流不再回写 data/dataset.json（权限只给 contents: read）。
+#   如果在这里提交，会再次触发 A 形成死循环 —— 数据写入统一由云函数负责。
+#
+# 部署云函数后，config/config.json -> profile.schedule.daily_at 要同步到
+# 云函数的定时触发器（北京时间，不用换算 UTC）。本文件里的 cron 仍需与 config 一致，
+# 改完运行 `python scripts/sync_workflow.py`（CI 也会校验）。
 #
 # 两条发布通道，可同时启用：
 #   A. GitHub Pages（推荐，免费、地址永久固定、无需任何密钥）
@@ -14,26 +29,35 @@
 #      发布目标站点 / 固定地址同样在 config/config.json -> publish 的 site / site_url
 #
 # 一次性配置：Settings → Actions → General → Workflow permissions → 选 Read and write
-#
-# 注意：GitHub Actions 的 schedule 不保证准点，高峰时可能延迟几分钟到半小时。
-# 需要严格准点请用自建服务器 cron（见 README）。
 
 name: daily-update
 
 on:
+  push:
+    branches: [main]
+    paths:
+      - data/dataset.json     # 云函数提交数据后自动触发；只改代码不会误触发部署
+
   schedule:
     # UTC 18:00 = 北京时间次日 02:00（由 config/config.json -> profile.schedule 生成，改时间后运行 python scripts/sync_workflow.py）
+    # 兜底用：云函数没跑时，至少用已有数据重建一次站点
     - cron: "0 18 * * *"
+
   workflow_dispatch:      # 允许在 Actions 页面手动触发
+
+concurrency:
+  group: daily-update     # push 与 schedule 撞车时排队，不并发部署
+  cancel-in-progress: false
 
 jobs:
   update:
     runs-on: ubuntu-latest
+    timeout-minutes: 15   # 不再抓取，正常几十秒；设上限防止异常时一直挂着
 
     permissions:
-      contents: write    # 推送数据到独立的 data 分支（主分支保持只读）
-      pages: write       # 部署 GitHub Pages
-      id-token: write    # Pages OIDC
+      contents: read      # 只读：数据由云函数写入，这里不回写（回写会循环触发）
+      pages: write        # 部署 GitHub Pages
+      id-token: write     # Pages OIDC
 
     environment:
       name: github-pages
@@ -41,6 +65,7 @@ jobs:
 
     env:
       MASHANGJIA_LOGIN_TOKEN: ${{ secrets.MASHANGJIA_LOGIN_TOKEN }}
+      PYTHONUNBUFFERED: "1"   # 让 Python 日志实时刷出来，卡住时看得到进度
 
     steps:
       - name: 检出代码
@@ -51,55 +76,13 @@ jobs:
         with:
           python-version: "3.11"
 
-      - name: 恢复详情缓存
-        uses: actions/cache@v4
-        with:
-          path: data/cache
-          key: recruit-detail-cache-${{ github.run_id }}
-          restore-keys: |
-            recruit-detail-cache-
-
       - name: 校验自动更新时间
         run: python scripts/sync_workflow.py --check
 
-      - name: 抓取并生成站点
-        run: python scripts/daily_update.py
-
-      - name: 推送数据变更到 data 分支（主分支保持只读，只存核心代码）
-        env:
-          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
-        run: |
-          set -euo pipefail
-          git config --global user.name  "github-actions[bot]"
-          git config --global user.email "github-actions[bot]@users.noreply.github.com"
-
-          # 单向产物流：main（核心代码，机器人永不提交）→ data（仅数据，白名单只有
-          # data/dataset.json）。在临时目录里独立克隆操作，与主分支工作区物理隔离，
-          # 杜绝误把产物/脚本带进主分支或反向覆盖。
-          REMOTE="https://x-access-token:${GH_TOKEN}@github.com/${GITHUB_REPOSITORY}.git"
-          BRANCH_DIR="$(mktemp -d)/data-branch"
-
-          if git ls-remote --exit-code "$REMOTE" refs/heads/data >/dev/null 2>&1; then
-            # data 分支已存在：直接克隆最新版（每次全新克隆，无需 pull/rebase）
-            git clone --depth 1 --branch data "$REMOTE" "$BRANCH_DIR"
-          else
-            # 首次运行：基于默认分支建无共同历史的孤儿分支，清空后只放白名单数据文件
-            git clone --depth 1 "$REMOTE" "$BRANCH_DIR"
-            git -C "$BRANCH_DIR" checkout --orphan data
-            git -C "$BRANCH_DIR" rm -rf --quiet .
-          fi
-
-          mkdir -p "$BRANCH_DIR/data"
-          # 白名单：整个分支只允许存在 data/dataset.json 这一个产物
-          cp data/dataset.json "$BRANCH_DIR/data/dataset.json"
-
-          git -C "$BRANCH_DIR" add data/dataset.json
-          if git -C "$BRANCH_DIR" diff --cached --quiet; then
-            echo "本次无数据变更"
-          else
-            git -C "$BRANCH_DIR" commit -m "chore(data): 每日自动更新 $(date -u +'%Y-%m-%d')"
-            git -C "$BRANCH_DIR" push --set-upstream origin data
-          fi
+      - name: 生成站点
+        # --from-dataset：跳过抓取，直接用云函数提交的 data/dataset.json 重建页面，
+        # 因此本步骤完全不访问国内站点。
+        run: python scripts/daily_update.py --from-dataset
 
       - name: 上传 Pages 制品
         uses: actions/upload-pages-artifact@v3
