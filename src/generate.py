@@ -19,6 +19,7 @@ from pathlib import Path
 from typing import Any, Dict, List
 
 from src.textutil import clean_leading_marks
+from src.timeutil import cn_now
 
 CSS = """
 :root{
@@ -66,14 +67,13 @@ header .meta a{color:#cdd6ea;}
 .stat:hover .l .go{opacity:1;}
 .stat.hl .n{color:var(--red);} .stat.ok .n{color:var(--green);} .stat.ex .n{color:var(--grey);}
 
-/* 标签栏：向下滚动时吸顶固定在顶部。
-   注意：这里刻意不用 backdrop-filter —— 部分移动端浏览器（Safari 内核 / 微信 X5）
-   遇到毛玻璃会让 sticky 失效，移动端反馈过「电脑上固定、手机上不固定」，故改用不透明背景 */
-.tabshell{position:-webkit-sticky;position:sticky;top:0;z-index:60;display:flex;
-  justify-content:center;margin:22px 0 0;padding:12px 0 10px;background:var(--bg);}
-/* JS 兜底：浏览器确实不支持 sticky 时改用 fixed，并撑起等高占位避免跳动 */
-.tabshell-ph{height:0;}
-.tabshell.js-stuck{position:fixed;left:0;right:0;top:0;margin:0;}
+/* 标签栏吸顶：不依赖 position:sticky —— 微信 X5 / 夸克等移动端内核对它支持不稳
+   （实测「电脑固定、手机不固定」），统一由 JS 用「占位元素 + position:fixed」驱动，
+   所有浏览器行为一致。display 用 block + text-align 居中，避开老内核 sticky+flex 的坑 */
+.tabshell{display:block;text-align:center;margin:22px 0 0;padding:12px 0 10px;background:var(--bg);}
+.tabshell.js-stuck{position:fixed;left:0;right:0;top:0;z-index:60;margin:0;}
+/* JS 吸顶的等高占位元素，避免元素切 fixed 后页面跳动 */
+.sticky-ph{height:0;overflow:hidden;}
 .tabs{display:inline-flex;gap:4px;background:#e8ecf4;padding:4px;border-radius:13px;
   box-shadow:inset 0 1px 2px rgba(31,36,48,.06);}
 .tab{appearance:none;border:none;background:transparent;cursor:pointer;font:inherit;
@@ -89,10 +89,11 @@ header .meta a{color:#cdd6ea;}
 .panel.active{display:block;}
 .nojs .panel{display:block !important;}
 
-/* 筛选条跟着标签栏一起吸顶：往下翻场次时也能随时改筛选（同样不用毛玻璃，理由见标签栏） */
-.bar{position:-webkit-sticky;position:sticky;top:var(--tab-h,62px);z-index:55;
-  display:flex;gap:7px;flex-wrap:wrap;align-items:center;margin:0 0 14px;padding:9px 0 11px;
+/* 筛选条跟着标签栏一起吸顶：往下翻场次时也能随时改筛选（同样由 JS 驱动，理由见标签栏）。
+   吸顶时 top/left/width 由 JS 按占位元素实测写入，z-index 低于标签栏 */
+.bar{display:flex;gap:7px;flex-wrap:wrap;align-items:center;margin:0 0 14px;padding:9px 0 11px;
   border-bottom:1px solid var(--line);scroll-margin-top:78px;background:var(--bg);}
+.bar.js-stuck{position:fixed;z-index:55;margin:0;}
 .fbtn{appearance:none;border:1px solid var(--line);background:var(--card);cursor:pointer;
   font:inherit;font-size:12.5px;color:var(--ink2);padding:5px 14px;border-radius:999px;
   transition:all .15s ease;}
@@ -272,9 +273,16 @@ footer a{color:var(--muted);}
   .li .t{flex:0 0 auto;padding:4px 12px;}
   .li .vn{padding:0;font-size:12px;}
   .li .st{margin-left:0;}
-  .row{flex-direction:column;gap:2px;}
   .tab{padding:9px 15px;font-size:13.5px;}
   .cal-grid{gap:3px;} .cal-navs .cal-ym{min-width:64px;}
+  /* 「与我相关」卡片窄屏重排：单位名占满首行（可换行）、简章按钮通栏居中、
+     匹配标签与内容同行、时间与地点保持同一行左对齐，避免元素各自散落 */
+  .card{padding:14px;}
+  .card-hd{gap:8px;}
+  .card-hd .co{font-size:15px;flex:1 1 calc(100% - 31px);min-width:0;}
+  .card-hd .brief{margin-left:0;width:100%;justify-content:center;}
+  .row .k{flex-basis:46px;}
+  .row.when-place{flex-direction:row;flex-wrap:wrap;align-items:center;gap:6px 10px;}
 }
 """
 
@@ -315,58 +323,89 @@ JS = """
   var root=document.documentElement;
   root.classList.remove('nojs');
 
+  // ---- 吸顶：统一由 JS「占位元素 + position:fixed」驱动，不依赖 position:sticky ----
+  // 微信内置浏览器（X5）/ 夸克等移动端内核对 sticky 支持不稳（反馈过「电脑固定、手机不固定」），
+  // JS 方案在所有浏览器行为一致。原理：在元素原位置插入等高占位，元素滚到视口边缘时切 fixed，
+  // 滚回时还原；占位元素保持文档流高度，页面不跳动。
+  var stickies=[];
+  function pageY(){ return window.pageYOffset||document.documentElement.scrollTop||0; }
+  function makeSticky(el, topFn, fullWidth){
+    var ph=document.createElement('div');
+    ph.className='sticky-ph';
+    el.parentNode.insertBefore(ph, el);
+    var stuck=false;
+    function phDocTop(){ return ph.getBoundingClientRect().top+pageY(); }
+    function layout(){
+      el.style.top=topFn()+'px';
+      if(fullWidth){
+        el.style.left='0px'; el.style.right='0px';
+      }else{
+        var r=ph.getBoundingClientRect();
+        el.style.left=r.left+'px';
+        el.style.width=r.width+'px';
+      }
+    }
+    function stick(){
+      stuck=true;
+      ph.style.height=el.offsetHeight+'px';
+      el.classList.add('js-stuck');
+      layout();
+    }
+    function unstick(){
+      stuck=false;
+      el.classList.remove('js-stuck');
+      el.style.top=el.style.left=el.style.right=el.style.width='';
+      ph.style.height='0px';
+    }
+    function check(){
+      // 所在面板隐藏（display:none）时无布局：已吸顶的先释放，未吸顶的跳过
+      if(!el.getClientRects().length){
+        if(stuck) unstick();
+        return;
+      }
+      var threshold=phDocTop()-topFn();
+      var y=pageY();
+      if(!stuck){ if(y>threshold) stick(); }
+      else if(y<threshold) unstick();
+    }
+    window.addEventListener('scroll', check, {passive:true});
+    window.addEventListener('resize', function(){ if(stuck) layout(); check(); });
+    var inst={check:check, relayout:function(){ if(stuck) layout(); }};
+    stickies.push(inst);
+    return inst;
+  }
+
+  var shell=document.querySelector('.tabshell');
+  // 把标签栏的实际高度写进 CSS 变量，供筛选条吸顶时的 top 与 scroll-margin 对齐
+  function syncTabH(){
+    if(shell) root.style.setProperty('--tab-h', shell.offsetHeight+'px');
+  }
+  function checkAllStickies(){
+    stickies.forEach(function(s){ s.check(); });
+    syncTabH();
+    stickies.forEach(function(s){ s.relayout(); });
+  }
+
+  if(shell) makeSticky(shell, function(){ return 0; }, true);
+  [].slice.call(document.querySelectorAll('.bar')).forEach(function(bar){
+    makeSticky(bar, function(){ return shell?shell.offsetHeight:0; }, false);
+  });
+  syncTabH();
+  window.addEventListener('resize', syncTabH);
+  window.addEventListener('load', checkAllStickies);
+
   var tabs=[].slice.call(document.querySelectorAll('.tab'));
   var panels=[].slice.call(document.querySelectorAll('.panel'));
   function select(i){
     tabs.forEach(function(t,k){t.setAttribute('aria-selected', k===i?'true':'false');});
     panels.forEach(function(p,k){p.classList.toggle('active', k===i);});
     try{ history.replaceState(null,'','#p'+i); }catch(e){}
+    // 面板显隐切换后，两个面板里的筛选条吸顶状态都要重算
+    checkAllStickies();
   }
   tabs.forEach(function(t,i){t.addEventListener('click',function(){select(i);});});
   var h=(location.hash||'').replace('#p','');
   select(h==='1'?1:0);
-
-  // 把标签栏的实际高度写进 CSS 变量，筛选条吸顶时才能严丝合缝地贴在它下面
-  var shell=document.querySelector('.tabshell');
-  function syncTabH(){
-    if(shell) root.style.setProperty('--tab-h', shell.offsetHeight+'px');
-  }
-  syncTabH();
-  window.addEventListener('resize', syncTabH);
-
-  // 兜底：少数移动端浏览器对 position:sticky 支持不佳（手机反馈过「电脑上固定、手机上不固定」）。
-  // 滚动时检测标签栏是否真的吸住了：该吸顶却跟着页面滚走，就改用 fixed + 等高占位元素兜底。
-  (function(){
-    if(!shell) return;
-    var ph=document.createElement('div');
-    ph.className='tabshell-ph';
-    shell.parentNode.insertBefore(ph, shell);
-    var stuck=false;
-    function stick(){
-      stuck=true;
-      ph.style.height=shell.offsetHeight+'px';
-      shell.classList.add('js-stuck');
-      syncTabH();
-    }
-    function unstick(){
-      stuck=false;
-      shell.classList.remove('js-stuck');
-      ph.style.height='0px';
-      syncTabH();
-    }
-    function check(){
-      if(stuck){
-        var phTop=ph.getBoundingClientRect().top+window.pageYOffset;
-        if(window.pageYOffset<=phTop+1) unstick();
-        return;
-      }
-      // sticky 生效时 top 恒为 0；滚出明显负值说明它没吸住
-      if(shell.getBoundingClientRect().top < -8) stick();
-    }
-    window.addEventListener('scroll', check, {passive:true});
-    window.addEventListener('resize', check);
-    check();
-  })();
 
   function panelOf(el){
     var p=el;
@@ -892,7 +931,8 @@ class Generator:
         expired = sum(1 for f in fairs if f["status"] == "expired")
         upcoming = total - expired
         matched = sum(1 for s in scored if s["tier"] > 0)
-        now = dt.datetime.now().strftime("%Y-%m-%d %H:%M")
+        # 统一用北京时间：CI / 云函数默认 UTC，直接 now() 会把 18:02 显示成 10:02
+        now = cn_now().strftime("%Y-%m-%d %H:%M")
         rng = self.fair_range
 
         overview = self._overview(fairs, months)
@@ -964,7 +1004,7 @@ class Generator:
         # 站点图标（SVG，随站点一起发布，避免依赖外部图床）
         (self.site_dir / "favicon.svg").write_text(FAVICON_SVG, encoding="utf-8")
         (self.site_dir / "data.json").write_text(
-            json.dumps({"updated_at": dt.datetime.now().isoformat(timespec="seconds"),
+            json.dumps({"updated_at": cn_now().isoformat(timespec="seconds"),
                         "total": len(fairs), "fairs": scored}, ensure_ascii=False),
             encoding="utf-8")
         return out

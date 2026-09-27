@@ -24,6 +24,7 @@ import re
 from typing import Any, Dict, List, Optional
 
 from src.textutil import clean_leading_marks
+from src.timeutil import cn_today
 
 SENTENCE_SPLIT = re.compile(r"[\n；;。]| \| ")
 
@@ -186,7 +187,7 @@ class Matcher:
 
 def mark_status(fairs: List[Dict[str, Any]], today: Optional[dt.date] = None) -> List[Dict[str, Any]]:
     """给每场招聘会标记 已过期 / 今天 / 还有N天。过期场次保留，只是状态不同。"""
-    today = today or dt.date.today()
+    today = today or cn_today()
     out: List[Dict[str, Any]] = []
     for f in fairs:
         try:

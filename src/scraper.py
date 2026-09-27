@@ -27,6 +27,8 @@ import urllib.request
 from pathlib import Path
 from typing import Any, Dict, Iterable, List, Optional
 
+from src.timeutil import cn_now
+
 WEEKDAY_CN = ["周一", "周二", "周三", "周四", "周五", "周六", "周日"]
 
 
@@ -192,7 +194,7 @@ class Scraper:
             "time": (payload.get("TimeSlotText") or payload.get("TimeSlot") or "").strip(),
             "date": (payload.get("HoldDate") or "")[:10],
             "description": _html_to_text(payload.get("Description") or ""),
-            "fetched_at": dt.datetime.now().isoformat(timespec="seconds"),
+            "fetched_at": cn_now().isoformat(timespec="seconds"),
         }
         cache_file.write_text(json.dumps(detail, ensure_ascii=False), encoding="utf-8")
         return detail

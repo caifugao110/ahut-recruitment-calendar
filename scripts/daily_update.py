@@ -37,6 +37,7 @@ from src.envfile import apply_env_overrides, load_env_file  # noqa: E402
 from src.generate import Generator  # noqa: E402
 from src.matcher import Matcher, mark_status  # noqa: E402
 from src.scraper import Scraper  # noqa: E402
+from src.timeutil import cn_today  # noqa: E402
 
 
 def load_json(path: Path) -> Dict[str, Any]:
@@ -99,7 +100,7 @@ def main() -> int:
         print(f"      本次抓到 {len(fairs)} 场")
 
         snapshot_dir = ROOT / config["output"]["data_dir"] / "snapshot"
-        save_json(snapshot_dir / f"{dt.date.today().isoformat()}.json", fairs)
+        save_json(snapshot_dir / f"{cn_today().isoformat()}.json", fairs)
 
         dataset = load_dataset(dataset_path)
         added = merge_dataset(dataset, fairs)
@@ -112,7 +113,7 @@ def main() -> int:
     print(f"[2/5] 合并数据集：新增 {added} 场，区间内累计 {len(all_fairs)} 场")
 
     print("[3/5] 标记过期状态 ...")
-    today = dt.date.today()
+    today = cn_today()
     fairs_marked = mark_status(all_fairs, today)
     print(f"      未过期 {sum(1 for f in fairs_marked if f['status'] != 'expired')} 场，"
           f"已过期 {sum(1 for f in fairs_marked if f['status'] == 'expired')} 场")

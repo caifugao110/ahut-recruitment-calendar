@@ -66,6 +66,7 @@ from src.dataset import (  # noqa: E402
     dumps_dataset, in_range, merge_dataset, normalize_dataset_times,
 )
 from src.scraper import Scraper  # noqa: E402
+from src.timeutil import cn_today  # noqa: E402
 
 DEFAULT_BRANCH = "main"
 GITHUB_API = "https://api.github.com"
@@ -168,7 +169,7 @@ def parse_repo(repo_url: str) -> str:
 
 
 def today_message(total: int, added: int) -> str:
-    return (f"chore(data): 云函数每日抓取 {dt.date.today().isoformat()}"
+    return (f"chore(data): 云函数每日抓取 {cn_today().isoformat()}"
             f"（新增 {added} 场，累计 {total} 场）")
 
 
