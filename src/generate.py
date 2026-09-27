@@ -430,7 +430,7 @@ class Generator:
                     past = rows[0]["status"] == "expired"
                     cls = "day past" if past else "day"
                     parts.append(
-                        f'<div class="{cls}" data-status="{esc(rows[0]['status'])}">'
+                        f'<div class="{cls}" data-status="{esc(rows[0]["status"])}">'
                         f'<div class="day-hd"><span class="d">{esc(_day_label(day))}</span>'
                         f'<span class="w">{esc(rows[0].get("weekday",""))}</span>'
                         f'<span class="cnt">{len(rows)} 场 · {esc(rows[0]["status_label"])}</span></div>'
