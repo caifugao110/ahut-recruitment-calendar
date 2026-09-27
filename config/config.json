@@ -1,28 +1,149 @@
 {
+  "_comment": "项目唯一配置文件，分四段：site/links/request/output = 数据源与产物；profile = 个人画像与定时；publish = 发布。改这一个文件即可，无需动代码。",
+
   "site": {
+    "_comment": "数据来源站点。页面是 JS 动态渲染的，实际数据走 api_path 指向的接口。",
     "name": "安徽工业大学 · 招聘日历",
+    "author": "Tobin",
     "base_url": "https://ahut.ahbys.com",
     "calendar_url": "https://ahut.ahbys.com/RecruitCalendar.html",
     "api_path": "/API/Web/Recruit.ashx",
     "detail_url": "https://ahut.ahbys.com/Recruit.html?id={id}"
   },
+
   "links": {
+    "_comment": "页面页头/页脚展示的外链。fork 后改成自己的仓库与 Pages 地址。",
     "repo": "https://github.com/caifugao110/ahut-recruitment-calendar",
     "pages": "https://caifugao110.github.io/ahut-recruitment-calendar/"
   },
-  "range": {
-    "start": "2026-09-01",
-    "end": "2026-12-31"
-  },
+
   "request": {
+    "_comment": "抓取限速与重试。delay_seconds 是每次请求的最小间隔，请勿调高频率影响对方服务。",
     "timeout": 30,
     "retries": 3,
     "delay_seconds": 0.15,
     "user_agent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/124.0 Safari/537.36"
   },
+
   "output": {
+    "_comment": "生成产物的目录与文件名。data_dir 存累计数据集、快照与详情缓存；site_dir 存静态站点。",
     "site_dir": "site",
     "data_dir": "data",
     "index_name": "index.html"
+  },
+
+  "profile": {
+    "_comment": "个人画像：招聘会时间区间 + 每日自动更新时间 + 专业/学历/城市匹配规则都在这里。换个人用只改这一段。",
+
+    "fair_range": {
+      "_comment": "要追踪的招聘会日期范围（闭区间）。只抓取/收录此区间内的场次，页面顶部的统计区间也显示它。",
+      "start": "2026-09-01",
+      "end": "2026-12-31"
+    },
+
+    "schedule": {
+      "_comment": "每日自动更新时间（24 小时制，北京时间 UTC+8）。改完运行 python scripts/sync_workflow.py 同步到 GitHub Actions；用自建 cron 或 Windows 任务计划时也请按这个时间设置。",
+      "daily_at": "02:00",
+      "timezone": "Asia/Shanghai"
+    },
+
+    "major": "材料科学与工程",
+    "education": "硕士研究生",
+
+    "education_keywords": {
+      "_comment": "识别简章中的学历要求。target 命中=该单位招你这个学历；higher 命中=门槛更高（如博士）",
+      "target": ["硕士", "研究生"],
+      "higher": ["博士"]
+    },
+
+    "major_keywords": {
+      "_comment": "命中即代表该单位招聘该专业方向。strong/weak 各取最高档位，不累加。",
+      "strong": [
+        "材料科学与工程",
+        "材料类",
+        "材料学",
+        "材料工程",
+        "材料成型及控制工程",
+        "材料成型",
+        "金属材料工程",
+        "金属材料",
+        "复合材料",
+        "高分子材料",
+        "无机非金属材料",
+        "新能源材料",
+        "材料化学",
+        "材料物理",
+        "粉末冶金"
+      ],
+      "weak": [
+        "冶金",
+        "高分子",
+        "焊接",
+        "陶瓷",
+        "纺织材料",
+        "矿物加工",
+        "材料"
+      ]
+    },
+
+    "cities": {
+      "_comment": "primary 为意向城市，严格匹配：仅南京 / 徐州，周边城市不加分。需要通勤圈时在 belt 里按 {\"南京\": [\"无锡\", ...]} 配置。",
+      "primary": ["南京", "徐州"],
+      "belt": {}
+    },
+
+    "weights": {
+      "_comment": "打分取最高档位，不累加。total = 专业分 + 城市分 × city_weight_ratio + 学历分。调整这些值即可改变专业与城市的相对重要性。",
+      "major_strong": 3.0,
+      "major_weak": 0.8,
+      "city_primary": 3.0,
+      "city_belt": 1.2,
+      "city_weight_ratio": 1.2,
+      "education_match": 0.6,
+      "education_higher_penalty": 0.3
+    },
+
+    "thresholds": {
+      "_comment": "总分达到即归入对应档位：tier1 强相关 / tier2 相关 / tier3 沾边，低于 tier3 为不相关。",
+      "tier1": 4.0,
+      "tier2": 2.0,
+      "tier3": 0.1
+    }
+  },
+
+  "publish": {
+    "_comment": "发布配置：码上架（mashangjia）。仓库内不含任何凭据，fork 后改 site / site_url 即可发布到自己的站点。不用码上架可整段忽略。",
+
+    "provider": {
+      "_comment": "发布平台信息。base_url 只用于日志与提示，脚本不自己拼 HTTP 请求，一律走官方 CLI。",
+      "name": "mashangjia",
+      "label": "码上架",
+      "base_url": "https://mashangjia.com",
+      "cli": {
+        "_comment": "全局有 command 就直接用；没有则退回 fallback（npx 临时拉取），不改动系统环境。",
+        "command": "mashangjia",
+        "npm_package": "mashangjia",
+        "fallback": ["npx", "--yes", "mashangjia"]
+      },
+      "credentials": {
+        "_comment": "只存「环境变量名」，不存值。login_token=登录 Token（控制台「API Token」页面生成）；deploy_token=部署口令，二者不是同一种凭据、格式校验不同。",
+        "login_token_env": "MASHANGJIA_LOGIN_TOKEN",
+        "deploy_token_env": "MASHANGJIA_DEPLOY_TOKEN"
+      }
+    },
+
+    "mode": "account",
+    "project_dir": "site",
+    "harness": "workbuddy",
+
+    "site": "ahut-recruitment-calendar",
+    "site_url": "https://ahut-recruitment-calendar.mashangjia.com/",
+    "site_url_pattern": "https://{site}.mashangjia.com/",
+
+    "_note_site": "★ 目标站点 slug，必须与 site_url / site_url_pattern 对得上。fork 后改成自己的 slug 即可，其它地方不用动。",
+    "_note_site_url": "★ 站点的固定访问地址。留空时由 site_url_pattern 用 {site} 推导；CLI 返回地址与它不一致时脚本会给出提示。",
+    "_note_anonymous": "匿名模式每次部署都是新项目、新地址，且临时站约 24 小时后预览过期。想让同一个固定地址每天更新，请用 account 模式。",
+    "_note_account": "account 模式凭据三选一：① 环境变量（名字见 provider.credentials.login_token_env，CI 用这个，脚本会自动先 login 再部署）；② 本机执行过 mashangjia login --token <token>；③ 都没有则只能用匿名。",
+    "_note_security": "Token 只走环境变量或 CI Secret，严禁写进本文件或任何入库文件。仓库 .gitignore 已屏蔽 .env* / *.token。"
   }
 }

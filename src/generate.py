@@ -3,7 +3,7 @@ generate.py — 把抓取到的招聘会数据渲染成一个纯静态单页站�
 
 页面结构：
     招聘会总览（默认页） —— 按月份 / 日期罗列场次，默认只显示未过期，已过期可一键切出
-    与我相关            —— 按 config/profile.json 的画像（专业 + 学历 + 意向城市）打分排序
+    与我相关            —— 按 config/config.json -> profile 的画像（专业 + 学历 + 意向城市）打分排序
 
 产物不依赖任何后端，双击即可打开，也能直接托管到任意静态空间。
 """
@@ -13,6 +13,7 @@ from __future__ import annotations
 import datetime as dt
 import html as html_mod
 import json
+import re
 from collections import OrderedDict
 from pathlib import Path
 from typing import Any, Dict, List
@@ -44,12 +45,18 @@ header h1{margin:0 0 7px;font-size:24px;letter-spacing:.3px;position:relative;z-
 header .meta{color:#c3cbdd;font-size:13px;position:relative;z-index:1;}
 header .meta code{background:rgba(255,255,255,.13);padding:1px 7px;border-radius:5px;}
 header .meta a{color:#cdd6ea;}
-header .links{display:flex;flex-wrap:wrap;gap:8px;margin-top:14px;position:relative;z-index:1;}
-header .links a{display:inline-flex;align-items:center;gap:6px;font-size:12.5px;
-  background:rgba(255,255,255,.12);border:1px solid rgba(255,255,255,.22);
-  border-radius:999px;padding:5px 13px;color:#e7ecf5;transition:background .15s ease;}
-header .links a:hover{background:rgba(255,255,255,.22);text-decoration:none;}
-header .links svg{width:13px;height:13px;fill:currentColor;flex:0 0 13px;}
+header .links{display:flex;flex-wrap:wrap;gap:10px;margin-top:18px;position:relative;z-index:1;}
+header .links a{display:inline-flex;align-items:center;gap:7px;font-size:13px;font-weight:600;
+  border-radius:10px;padding:8px 16px;letter-spacing:.2px;
+  transition:transform .15s ease,box-shadow .15s ease,background .15s ease;}
+header .links a:hover{text-decoration:none;transform:translateY(-1px);}
+header .links a.primary{background:#fff;color:#2b3a55;
+  box-shadow:0 4px 14px rgba(0,0,0,.22);}
+header .links a.primary:hover{box-shadow:0 7px 20px rgba(0,0,0,.3);background:#f4f7ff;}
+header .links a.ghost{background:rgba(255,255,255,.08);border:1px solid rgba(255,255,255,.3);
+  color:#e7ecf5;}
+header .links a.ghost:hover{background:rgba(255,255,255,.2);border-color:rgba(255,255,255,.5);}
+header .links svg{width:14px;height:14px;fill:currentColor;flex:0 0 14px;}
 
 .stats{display:grid;grid-template-columns:repeat(4,1fr);gap:12px;margin:16px 0 4px;}
 .stat{background:var(--card);border:1px solid var(--line);border-radius:14px;padding:14px 16px;
@@ -109,19 +116,33 @@ h2.month span{font-size:12px;color:var(--muted);font-weight:400;margin-left:8px;
   background:var(--blue-soft);color:var(--blue);}
 .day.past .day-hd .cnt{background:var(--grey-soft);color:var(--grey);}
 
-.li{display:flex;gap:12px;padding:11px 17px;border-top:1px solid #f1f3f8;align-items:baseline;flex-wrap:wrap;}
+.li{display:flex;gap:14px;padding:13px 17px;border-top:1px solid #f1f3f8;align-items:flex-start;
+  transition:background .15s ease;}
 .li:first-of-type{border-top:none;}
-.li .t{font-variant-numeric:tabular-nums;font-weight:600;font-size:12.5px;color:var(--blue);min-width:96px;}
-.day.past .li .t{color:var(--grey);}
-.li .co{font-size:14px;font-weight:600;}
-.day.past .li .co{color:#9aa2b1;font-weight:500;}
-.li .vn{font-size:12.5px;color:var(--ink2);margin-top:2px;}
+.li:hover{background:#f8faff;}
+.li .t{font-variant-numeric:tabular-nums;font-weight:700;font-size:12px;color:var(--blue);
+  min-width:92px;background:var(--blue-soft);border-radius:8px;padding:4px 0;text-align:center;
+  margin-top:1px;flex:0 0 92px;}
+.day.past .li .t{color:var(--grey);background:var(--grey-soft);}
+.li .bd{flex:1;min-width:220px;}
+.li .co{font-size:14.5px;font-weight:700;letter-spacing:.2px;}
+.day.past .li .co{color:#9aa2b1;font-weight:600;}
+.li .vn{font-size:12.5px;color:var(--ink2);margin-top:3px;display:flex;align-items:center;gap:4px;}
+.li .vn svg{width:12px;height:12px;fill:#a6aebe;flex:0 0 12px;}
 .day.past .li .vn{color:#aab1bf;}
-.li .st{margin-left:auto;font-size:11.5px;font-weight:700;border-radius:6px;padding:2px 9px;white-space:nowrap;}
+.li .pay{display:inline-flex;align-items:center;gap:5px;margin-top:5px;font-size:12px;
+  font-weight:600;color:var(--amber);background:var(--amber-soft);border:1px solid #f3e3c3;
+  border-radius:7px;padding:2px 9px;max-width:100%;}
+.li .pay svg{width:12px;height:12px;fill:currentColor;flex:0 0 12px;}
+.day.past .li .pay{color:#b6a98f;background:#f6f4ef;border-color:#e9e5da;}
+.li .st{margin-left:auto;font-size:11.5px;font-weight:700;border-radius:6px;padding:3px 10px;
+  white-space:nowrap;flex:0 0 auto;}
 .st-expired{background:var(--grey-soft);color:var(--grey);}
 .st-today{background:var(--red-soft);color:var(--red);}
 .st-upcoming{background:var(--green-soft);color:var(--green);}
-.li .lk{font-size:12px;color:var(--muted);margin-top:3px;}
+.li .lk{font-size:12px;margin-top:5px;}
+.li .lk a{color:var(--muted);transition:color .15s ease;}
+.li .lk a:hover{color:var(--blue);text-decoration:none;}
 
 .card{background:var(--card);border:1px solid var(--line);border-radius:14px;padding:16px 20px;margin-bottom:12px;
   box-shadow:0 1px 3px rgba(31,36,48,.04);}
@@ -167,7 +188,9 @@ footer{margin-top:34px;font-size:12px;color:var(--muted);text-align:center;line-
 footer a{color:var(--muted);}
 @media(max-width:760px){
   .stats{grid-template-columns:repeat(2,1fr);}
-  .li .t{min-width:0;} .card-hd .when{margin-left:0;} .row{flex-direction:column;gap:2px;}
+  .li{flex-wrap:wrap;} .li .t{min-width:0;flex:0 0 auto;padding:4px 10px;}
+  .li .st{margin-left:0;}
+  .card-hd .when{margin-left:0;} .row{flex-direction:column;gap:2px;}
   .tab{padding:9px 15px;font-size:13.5px;}
 }
 """
@@ -205,6 +228,12 @@ ICON_PAGE = ('<svg viewBox="0 0 16 16" aria-hidden="true"><path d="M8 0a8 8 0 1 
              '14.4c-.6-.9-1.1-2-1.4-3.4h2.8c-.3 1.4-.8 2.5-1.4 3.4zm1.7-4.9H6.3a14 14 0 0 1 0-1.5h3.4c.1.5.1 '
              '1 0 1.5zm.4 4.4c.4-.7.8-1.5 1-2.4h2.3a6.5 6.5 0 0 1-3.3 2.4zm1.4-4h2.7c.1-.5.1-1 '
              '0-1.5h-2.7a16 16 0 0 1 0 1.5z"/></svg>')
+ICON_PIN = ('<svg viewBox="0 0 16 16" aria-hidden="true"><path d="M8 1.5a4.75 4.75 0 0 0-4.75 4.75c0 '
+            '3.4 4.06 8.1 4.23 8.27a.75.75 0 0 0 1.04 0c.17-.17 4.23-4.87 4.23-8.27A4.75 4.75 0 0 0 8 '
+            '1.5zm0 6.5a1.75 1.75 0 1 1 0-3.5 1.75 1.75 0 0 1 0 3.5z"/></svg>')
+ICON_COIN = ('<svg viewBox="0 0 16 16" aria-hidden="true"><path d="M8 1a7 7 0 1 0 0 14A7 7 0 0 0 8 1zm'
+             '2.9 4.1l-1.9 2.4h1.6v.9H8.55v.8h2.05v.9H8.55V12H7.45v-1.9H5.4v-.9h2.05v-.8H5.4v-.9H7L5.1 '
+             '5.1l.8-.6L8 6.8l2.1-2.3.8.6z"/></svg>')
 
 JS = """
 (function(){
@@ -284,12 +313,70 @@ def _day_label(date_str: str) -> str:
     return f"{int(d.month)}月{int(d.day)}日"
 
 
+_SALARY_KW = re.compile(r"(薪资|薪酬|年薪|月薪|待遇|工资)")
+_NUM_UNIT = re.compile(r"\d+\s*[-~—–]?\s*\d*\s*(?:万\s*/?\s*年|万元|万|元\s*/\s*月|元\s*/\s*年|[kKwW])")
+_SALARY_TABLE_LABEL = {"薪资", "薪资待遇", "月薪", "年薪", "薪酬"}
+
+
+def extract_salary(desc: str) -> str:
+    """
+    从招聘简章全文里提炼一句薪资待遇；没有明确数字则返回空串（页面不展示）。
+
+    覆盖两类常见写法：
+      1. 表格型：单独一行「薪资」，紧随其后是「| 8500元/月」「| 面议」这类数值行
+      2. 行文型：一行内同时出现 薪资/年薪等待遇词 与 数字+单位（万/元/月/k/W）
+    """
+    if not desc:
+        return ""
+    lines = desc.split("\n")
+
+    for i, raw in enumerate(lines):
+        label = raw.strip().strip("|").strip().rstrip("：:")
+        if label in _SALARY_TABLE_LABEL:
+            vals: List[str] = []
+            for nxt in lines[i + 1:i + 6]:
+                v = nxt.strip().strip("|").strip()
+                if not v:
+                    continue
+                if _NUM_UNIT.search(v) or v == "面议":
+                    vals.append(v)
+                elif vals:
+                    break
+            if vals:
+                return " / ".join(vals[:3])
+
+    for raw in lines:
+        line = raw.strip(" ●·|\t").strip()
+        if len(line) < 6:
+            continue
+        kw = _SALARY_KW.search(line)
+        if not kw or not _NUM_UNIT.search(line):
+            continue
+        seg = re.split(r"[。；;]", line)[0].strip(" ，,、")
+        # 从薪资关键词处起截取，去掉「1、实行试用期制度，试用期6个月，」这类铺垫前缀
+        start = kw.start()
+        if _NUM_UNIT.search(seg[start:]) and len(seg[start:]) >= 8:
+            # 保留关键词前的极短定语（如「综合」「转正」），最多往前取 6 字
+            head = seg[max(0, start - 6):start]
+            cut = max(head.rfind("，"), head.rfind(","), head.rfind("、"))
+            seg = head[cut + 1:] + seg[start:]
+        if len(seg) > 60:
+            seg = seg[:60].rstrip(" ，,、") + "…"
+        if not _NUM_UNIT.search(seg):
+            continue  # 「薪酬待遇优厚」这类空话，数字在别的分句里，宁缺毋滥
+        return seg
+    return ""
+
+
 class Generator:
     """静态站点生成器。"""
 
     def __init__(self, config: Dict[str, Any], profile: Dict[str, Any]) -> None:
         self.config = config
         self.profile = profile
+        # 招聘会时间区间与每日自动更新时间都来自统一配置的 profile 段
+        self.fair_range: Dict[str, Any] = profile.get("fair_range", {})
+        self.daily_at: str = (profile.get("schedule") or {}).get("daily_at", "02:00")
         self.site_dir = Path(config["output"]["site_dir"])
         self.site_dir.mkdir(parents=True, exist_ok=True)
 
@@ -337,7 +424,7 @@ class Generator:
                 f'<span>共 {len(items)} 场 · 未过期 {upcoming} 场</span></h2>'
             )
             if not items:
-                parts.append('<div class="empty">本月暂无招聘会安排（一旦官网放出，每日 02:00 会自动补上）。</div>')
+                parts.append(f'<div class="empty">本月暂无招聘会安排（一旦官网放出，每日 {esc(self.daily_at)} 会自动补上）。</div>')
             else:
                 for day, rows in self.group_by_day(items).items():
                     past = rows[0]["status"] == "expired"
@@ -350,12 +437,16 @@ class Generator:
                     )
                     for r in rows:
                         link = self.config["site"]["detail_url"].format(id=r["id"])
+                        salary = extract_salary(r.get("description", ""))
+                        pay_html = (f'<div><span class="pay">{ICON_COIN}{esc(salary)}</span></div>'
+                                    if salary else "")
                         parts.append(
                             '<div class="li">'
                             f'<div class="t">{esc(r["time"])}</div>'
-                            '<div style="flex:1;min-width:220px">'
+                            '<div class="bd">'
                             f'<div class="co">{esc(r["theme"])}</div>'
-                            f'<div class="vn">{esc(r["venue"])}</div>'
+                            f'<div class="vn">{ICON_PIN}{esc(r["venue"])}</div>'
+                            f"{pay_html}"
                             f'<div class="lk"><a href="{esc(link)}" target="_blank" rel="noopener">'
                             "查看官方简章 →</a></div>"
                             "</div>"
@@ -380,12 +471,12 @@ class Generator:
         parts.append(
             '<div class="note">匹配画像：<span>'
             + '<span class="sep">·</span>'.join(bits)
-            + "</span><br>打分与关键词均来自 <code>config/profile.json</code>，"
+            + "</span><br>打分与关键词均来自 <code>config/config.json → profile</code>，"
             "改动配置即可适配其他人。已过期的匹配项同样保留，仅作灰显。</div>"
         )
 
         if not matched:
-            parts.append('<div class="empty">当前区间内没有与画像匹配的招聘会。每日 02:00 会自动重新抓取并更新。</div>')
+            parts.append(f'<div class="empty">当前区间内没有与画像匹配的招聘会。每日 {esc(self.daily_at)} 会自动重新抓取并更新。</div>')
             return "".join(parts)
 
         parts.append(self._filter_bar("默认只显示未过期场次；已过期但仍想参考的可切换到「全部」"))
@@ -465,21 +556,22 @@ class Generator:
         upcoming = total - expired
         matched = sum(1 for s in scored if s["tier"] > 0)
         now = dt.datetime.now().strftime("%Y-%m-%d %H:%M")
-        rng = self.config["range"]
+        rng = self.fair_range
 
         overview = self._overview(fairs, months)
         relevant = self._relevant(scored)
         table = self._table(scored)
 
         links = self.config.get("links", {})
+        author = self.config["site"].get("author", "")
         repo_url = links.get("repo", "")
         pages_url = links.get("pages", "")
         link_html = ""
         if pages_url:
-            link_html += (f'<a href="{esc(pages_url)}" target="_blank" rel="noopener">'
+            link_html += (f'<a class="primary" href="{esc(pages_url)}" target="_blank" rel="noopener">'
                           f'{ICON_PAGE}<span>GitHub 原始页面</span></a>')
         if repo_url:
-            link_html += (f'<a href="{esc(repo_url)}" target="_blank" rel="noopener">'
+            link_html += (f'<a class="ghost" href="{esc(repo_url)}" target="_blank" rel="noopener">'
                           f'{ICON_GITHUB}<span>源代码仓库</span></a>')
 
         return (
@@ -493,7 +585,8 @@ class Generator:
             f"<style>{CSS}</style></head><body><div class=\"wrap\">"
             f"<header><h1>{esc(self.config['site']['name'])}</h1>"
             f"<div class=\"meta\">统计区间 <code>{esc(rng['start'])} ~ {esc(rng['end'])}</code>　·　"
-            f"数据更新 <code>{esc(now)}</code>　·　每日 <code>02:00</code> 自动更新<br>"
+            f"数据更新 <code>{esc(now)}</code>　·　每日 <code>02:00</code> 自动更新"
+            + (f"　·　作者 <code>{esc(author)}</code>" if author else "") + "<br>"
             "来源：<a href=\"" + esc(self.config["site"]["calendar_url"]) +
             "\" target=\"_blank\" rel=\"noopener\">ahut.ahbys.com 招聘日历</a></div>"
             f'<div class="links">{link_html}</div></header>'
@@ -517,13 +610,14 @@ class Generator:
             f'<div class="panel">{relevant}'
             f'<h2 class="month">匹配明细<span>共 {len(scored)} 场</span></h2>{table}</div>'
             "<footer>"
-            "本站为 MIT 开源项目，每日 02:00 自动从学校就业平台抓取并重新发布；"
+            f"本站为 MIT 开源项目，每日 {esc(self.daily_at)} 自动从学校就业平台抓取并重新发布；"
             "已过期的场次照常收录，切换筛选即可查看。<br>"
             "招聘信息以学校就业网实时发布为准，如有出入请以前者为准。<br>"
             + (f'<a href="{esc(pages_url)}" target="_blank" rel="noopener">GitHub 原始页面</a>'
                "　·　" if pages_url else "")
             + (f'<a href="{esc(repo_url)}" target="_blank" rel="noopener">源代码仓库</a>　·　'
                if repo_url else "")
+            + (f"作者 {esc(author)}　·　" if author else "")
             + f"生成时间 {esc(now)}　·　今天是 {esc(today.isoformat())}"
             "</footer></div>"
             f"<script>{JS}</script></body></html>"

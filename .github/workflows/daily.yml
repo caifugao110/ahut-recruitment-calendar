@@ -1,4 +1,6 @@
-# 每日 02:00（北京时间）在 GitHub 服务器上自动抓取招聘会并重新发布站点。
+# 每天在 config/config.json -> profile.schedule.daily_at 设定的时间（北京时间，默认 02:00）
+# 于 GitHub 服务器上自动抓取招聘会并重新发布站点。
+# 改完时间记得运行 `python scripts/sync_workflow.py` 把下面的 cron 同步过来（CI 也会校验）。
 #
 # 两条发布通道，可同时启用：
 #   A. GitHub Pages（推荐，免费、地址永久固定、无需任何密钥）
@@ -6,7 +8,10 @@
 #      地址形如 https://<用户名>.github.io/<仓库名>/
 #   B. 码上架（可选，需要 Secret）
 #      Settings → Secrets and variables → Actions → New repository secret
-#      名称 MASHANGJIA_LOGIN_TOKEN，值为码上架控制台生成的 API Token
+#      名称取 config/config.json -> publish.provider.credentials.login_token_env
+#      （默认 MASHANGJIA_LOGIN_TOKEN，改了配置这里也要同步改）
+#      值为码上架控制台「API Token」页面生成的登录 Token
+#      发布目标站点 / 固定地址同样在 config/config.json -> publish 的 site / site_url
 #
 # 一次性配置：Settings → Actions → General → Workflow permissions → 选 Read and write
 #
@@ -17,7 +22,7 @@ name: daily-update
 
 on:
   schedule:
-    # UTC 18:00 = 北京时间次日 02:00
+    # UTC 18:00 = 北京时间次日 02:00（由 config/config.json -> profile.schedule 生成，改时间后运行 python scripts/sync_workflow.py）
     - cron: "0 18 * * *"
   workflow_dispatch:      # 允许在 Actions 页面手动触发
 
@@ -54,6 +59,9 @@ jobs:
           restore-keys: |
             recruit-detail-cache-
 
+      - name: 校验自动更新时间
+        run: python scripts/sync_workflow.py --check
+
       - name: 抓取并生成站点
         run: python scripts/daily_update.py
 
@@ -85,10 +93,15 @@ jobs:
         with:
           node-version: "20"
 
-      - name: 同步发布到码上架（固定地址 ahut-recruitment-calendar）
+      - name: 显示码上架目标站点地址
+        if: env.MASHANGJIA_LOGIN_TOKEN != ''
+        run: python scripts/publish.py --print-url
+        # 地址来自 config/config.json -> publish.site_url（留空则由 site_url_pattern 推导）
+
+      - name: 同步发布到码上架
         if: env.MASHANGJIA_LOGIN_TOKEN != ''
         run: python scripts/publish.py
-        # publish.py 会读 config/publish.json 的 "site" 定向更新该站点。
+        # publish.py 会读 config/config.json -> publish.site 定向更新该站点。
         # 绑定自定义域名后必须走这种「按站点更新」的方式，按目录发布会新建站点。
 
       - name: 上传站点产物

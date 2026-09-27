@@ -1,10 +1,11 @@
 #!/usr/bin/env python3
 """
-daily_update.py —— 每日更新入口（建议由定时任务在 02:00 调用）。
+daily_update.py —— 每日更新入口（建议由定时任务在 config/config.json 设定的时间调用，默认 02:00）。
 
 流程：
-    1. 读取 config/config.json 与 config/profile.json
-    2. 抓取 2026-09-01 ~ 2026-12-31 的全部招聘会（含招聘简章全文）
+    1. 注入 .env（本地凭据/地址覆盖，没有则跳过），读取唯一配置文件 config/config.json
+       （数据源 / 个人画像 profile / 发布都在里面）
+    2. 按 config.json -> profile.fair_range 设定的区间抓取全部招聘会（含招聘简章全文）
     3. 写入当日快照 data/snapshot/YYYY-MM-DD.json，并合并进 data/dataset.json
        —— 已结束的场次不会被删除，只是被标记为"已过期"
     4. 按画像打分匹配
@@ -29,6 +30,7 @@ from typing import Any, Dict, List
 ROOT = Path(__file__).resolve().parent.parent
 sys.path.insert(0, str(ROOT))
 
+from src.envfile import apply_env_overrides, load_env_file  # noqa: E402
 from src.generate import Generator  # noqa: E402
 from src.matcher import Matcher, mark_status  # noqa: E402
 from src.scraper import Scraper, normalize_time  # noqa: E402
@@ -70,15 +72,29 @@ def main() -> int:
     parser.add_argument("--rebuild-cache", action="store_true", help="忽略本地详情缓存")
     parser.add_argument("--from-dataset", action="store_true",
                         help="跳过抓取，直接用已有的 data/dataset.json 重建页面（调参时用）")
-    parser.add_argument("--config", default="config/config.json")
-    parser.add_argument("--profile", default="config/profile.json")
+    parser.add_argument("--config", default="config/config.json",
+                        help="唯一配置文件路径（数据源 / profile 画像 / publish 发布）")
+    parser.add_argument("--env-file", default=".env",
+                        help="本地环境变量文件（不存在则忽略；真实环境变量优先于它）")
     args = parser.parse_args()
 
-    config = load_json(ROOT / args.config)
-    profile = load_json(ROOT / args.profile)
+    # 先注入 .env（本地凭据/地址覆盖），再读配置；CI 无 .env 时此步静默跳过
+    load_env_file(ROOT / args.env_file)
 
-    start = dt.date.fromisoformat(config["range"]["start"])
-    end = dt.date.fromisoformat(config["range"]["end"])
+    config = load_json(ROOT / args.config)
+    apply_env_overrides(config)
+    # 个人画像（时间区间 / 定时 / 专业 / 城市 / 权重）是统一配置里的 profile 段
+    profile = config.get("profile") or {}
+
+    fair_range = profile.get("fair_range", {})
+    try:
+        start = dt.date.fromisoformat(fair_range["start"])
+        end = dt.date.fromisoformat(fair_range["end"])
+    except (KeyError, TypeError) as exc:
+        raise SystemExit(
+            "config/config.json 缺少 profile.fair_range.start / profile.fair_range.end，"
+            "请参照文件内说明补全招聘会时间区间。"
+        ) from exc
     data_dir = ROOT / config["output"]["data_dir"]
 
     scraper = Scraper(config, data_dir)
