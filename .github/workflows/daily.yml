@@ -1,0 +1,96 @@
+# 每日 02:00（北京时间）在 GitHub 服务器上自动抓取招聘会并重新发布站点。
+#
+# 两条发布通道，可同时启用：
+#   A. GitHub Pages（推荐，免费、地址永久固定、无需任何密钥）
+#      仓库 → Settings → Pages → Build and deployment → Source 选 "GitHub Actions"
+#      地址形如 https://<用户名>.github.io/<仓库名>/
+#   B. 码上架（可选，需要 Secret）
+#      Settings → Secrets and variables → Actions → New repository secret
+#      名称 MASHANGJIA_API_TOKEN，值为码上架控制台生成的 API Token
+#
+# 一次性配置：Settings → Actions → General → Workflow permissions → 选 Read and write
+#
+# 注意：GitHub Actions 的 schedule 不保证准点，高峰时可能延迟几分钟到半小时。
+# 需要严格准点请用自建服务器 cron（见 README）。
+
+name: daily-update
+
+on:
+  schedule:
+    # UTC 18:00 = 北京时间次日 02:00
+    - cron: "0 18 * * *"
+  workflow_dispatch:      # 允许在 Actions 页面手动触发
+
+jobs:
+  update:
+    runs-on: ubuntu-latest
+
+    permissions:
+      contents: write    # 回写 dataset.json
+      pages: write       # 部署 GitHub Pages
+      id-token: write    # Pages OIDC
+
+    environment:
+      name: github-pages
+      url: ${{ steps.pages.outputs.page_url }}
+
+    env:
+      MASHANGJIA_API_TOKEN: ${{ secrets.MASHANGJIA_API_TOKEN }}
+
+    steps:
+      - name: 检出代码
+        uses: actions/checkout@v4
+
+      - name: 准备 Python
+        uses: actions/setup-python@v5
+        with:
+          python-version: "3.11"
+
+      - name: 恢复详情缓存
+        uses: actions/cache@v4
+        with:
+          path: data/cache
+          key: recruit-detail-cache-${{ github.run_id }}
+          restore-keys: |
+            recruit-detail-cache-
+
+      - name: 抓取并生成站点
+        run: python scripts/daily_update.py
+
+      - name: 提交数据变更
+        run: |
+          git config user.name  "github-actions[bot]"
+          git config user.email "github-actions[bot]@users.noreply.github.com"
+          git add data/dataset.json
+          if git diff --cached --quiet; then
+            echo "本次无数据变更"
+          else
+            git commit -m "chore(data): 每日自动更新 $(date -u +'%Y-%m-%d')"
+            git pull --rebase --autostash origin ${{ github.ref_name }} || true
+            git push
+          fi
+
+      - name: 上传 Pages 制品
+        uses: actions/upload-pages-artifact@v3
+        with:
+          path: site
+
+      - name: 部署到 GitHub Pages
+        id: pages
+        uses: actions/deploy-pages@v4
+
+      - name: 准备 Node（码上架发布用）
+        if: env.MASHANGJIA_API_TOKEN != ''
+        uses: actions/setup-node@v4
+        with:
+          node-version: "20"
+
+      - name: 同步发布到码上架
+        if: env.MASHANGJIA_API_TOKEN != ''
+        run: python scripts/publish.py --mode account
+
+      - name: 上传站点产物
+        uses: actions/upload-artifact@v4
+        with:
+          name: site
+          path: site/

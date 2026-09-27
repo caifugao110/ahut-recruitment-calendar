@@ -1,0 +1,309 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>个人匹配分析 · 材料科学与工程 × 南京/徐州</title>
+<style>
+  :root{
+    --ink:#1f2430; --ink2:#4a5364; --muted:#8a93a5; --line:#e6e9f0;
+    --bg:#f5f7fb; --card:#fff;
+    --red:#d4243c; --red-soft:#fdeef0;
+    --amber:#c77700; --amber-soft:#fff5e6;
+    --green:#1a7f52; --green-soft:#e8f6ee;
+    --blue:#2563eb; --blue-soft:#eff4ff;
+    --grey:#6b7280; --grey-soft:#f1f2f5;
+  }
+  *{box-sizing:border-box;}
+  body{margin:0;padding:30px 16px 60px;background:var(--bg);color:var(--ink);
+    font-family:"PingFang SC","Microsoft YaHei","Hiragino Sans GB",-apple-system,"Segoe UI",sans-serif;
+    -webkit-font-smoothing:antialiased;line-height:1.65;}
+  .wrap{max-width:1000px;margin:0 auto;}
+
+  header{background:linear-gradient(135deg,#2b3a55,#1f2430);color:#fff;border-radius:18px;padding:26px 30px;
+    position:relative;overflow:hidden;box-shadow:0 10px 30px rgba(31,36,48,.18);}
+  header::after{content:"";position:absolute;right:-40px;top:-50px;width:220px;height:220px;
+    background:radial-gradient(circle,rgba(212,36,60,.5),transparent 65%);}
+  header h1{margin:0 0 8px;font-size:23px;}
+  .chips{display:flex;flex-wrap:wrap;gap:8px;margin-top:12px;position:relative;z-index:1;}
+  .chip{background:rgba(255,255,255,.14);border:1px solid rgba(255,255,255,.25);
+    border-radius:999px;padding:4px 14px;font-size:13px;}
+
+  .lead{background:var(--card);border:1px solid var(--line);border-left:4px solid var(--red);
+    border-radius:12px;padding:18px 22px;margin:20px 0 26px;font-size:14.5px;}
+  .lead b{color:var(--red);}
+
+  h2.sec{font-size:17px;margin:34px 0 6px;padding-left:12px;border-left:4px solid var(--ink);}
+  h2.sec span{font-size:12.5px;color:var(--muted);font-weight:400;margin-left:8px;}
+  .sub{font-size:13px;color:var(--muted);margin:0 0 14px;padding-left:16px;}
+
+  .card{background:var(--card);border:1px solid var(--line);border-radius:14px;
+    padding:18px 22px;margin-bottom:14px;}
+  .card-hd{display:flex;align-items:baseline;gap:10px;flex-wrap:wrap;margin-bottom:10px;}
+  .rank{width:24px;height:24px;flex:0 0 24px;border-radius:7px;color:#fff;font-size:13px;
+    display:flex;align-items:center;justify-content:center;font-weight:700;}
+  .rank.t1{background:var(--red);} .rank.t2{background:var(--amber);} .rank.t3{background:var(--grey);}
+  .co{font-size:15.5px;font-weight:700;}
+  .when{margin-left:auto;font-size:12.5px;color:var(--blue);background:var(--blue-soft);
+    border-radius:8px;padding:3px 10px;font-weight:600;white-space:nowrap;}
+  .row{font-size:13.5px;margin:5px 0;display:flex;gap:8px;}
+  .row .k{color:var(--muted);flex:0 0 74px;font-size:12.5px;padding-top:1px;}
+  .row .v{flex:1;}
+  .why{background:#fafbfd;border:1px dashed #dfe3ec;border-radius:10px;padding:10px 14px;
+    font-size:13px;margin-top:12px;}
+  .why .t{font-weight:700;color:var(--ink2);margin-right:6px;}
+  .why.warn{background:var(--amber-soft);border-color:#f0dcb8;}
+  .why.warn .t{color:var(--amber);}
+
+  .badge{display:inline-block;font-size:11.5px;font-weight:700;padding:2px 9px;border-radius:6px;margin-right:6px;}
+  .b-hi{background:var(--green-soft);color:var(--green);}
+  .b-mid{background:var(--amber-soft);color:var(--amber);}
+  .b-lo{background:var(--grey-soft);color:var(--grey);}
+  .b-city{background:var(--blue-soft);color:var(--blue);}
+
+  table{width:100%;border-collapse:collapse;background:var(--card);border:1px solid var(--line);
+    border-radius:12px;overflow:hidden;font-size:13px;}
+  thead th{background:#f0f2f7;color:var(--ink2);font-weight:600;text-align:left;padding:10px 12px;white-space:nowrap;}
+  tbody td{padding:9px 12px;border-top:1px solid var(--line);vertical-align:middle;}
+  tbody tr:nth-child(even){background:#fafbfd;}
+
+  .todo{background:linear-gradient(135deg,#fffaf3,#fff);border:1px solid #f2e2c8;border-radius:14px;
+    padding:20px 24px;margin-top:28px;}
+  .todo h3{margin:0 0 12px;font-size:16px;color:#8a5a12;}
+  .todo ol{margin:0;padding-left:22px;font-size:14px;}
+  .todo li{margin-bottom:9px;}
+  .todo b{color:#8a5a12;}
+
+  footer{margin-top:30px;font-size:12px;color:var(--muted);text-align:center;line-height:1.8;}
+  @media(max-width:720px){.when{margin-left:0;}}
+</style>
+</head>
+<body>
+<div class="wrap">
+
+  <header>
+    <h1>个人匹配分析 · 材料科学与工程 × 南京 / 徐州</h1>
+    <div style="color:#c7cede;font-size:13.5px;">基于 9月28日—10月31日 共 17 场招聘会的官方招聘简章逐份比对</div>
+    <div class="chips">
+      <span class="chip">🎓 专业：材料科学与工程</span>
+      <span class="chip">📍 意向城市：南京 / 徐州</span>
+      <span class="chip">📅 统计时间：2026-09-27</span>
+    </div>
+  </header>
+
+  <div class="lead">
+    <b>先说结论：</b>这 17 场里，<b>没有一家同时满足「工作地在南京或徐州」+「明确招聘材料类专业」</b>。
+    实际情况是「专业对口」和「城市对口」分属不同单位，需要你权衡取舍。<br>
+    最值得去的 <b>3 场</b>：<b>10/8 南京冠盛汽配</b>（唯一南京实体岗位）、<b>10/9 中电二公司</b>（明确招材料科学与工程、社保可落南京）、<b>10/13 深南电路</b>（材料类岗位数量最多，无锡离南京最近）。
+    若坚持「徐州」，全场<b>无徐州岗位</b>，唯一地理上可行的是 <b>9/28 淮北矿业</b>（淮北紧邻徐州，约 60 km）。
+  </div>
+
+  <h2 class="sec">第一优先级<span>专业或城市强匹配，建议必去</span></h2>
+  <p class="sub">共 3 家。这 3 场与你最直接相关，时间上互不冲突。</p>
+
+  <div class="card">
+    <div class="card-hd"><span class="rank t1">1</span><span class="co">南京冠盛汽配有限公司</span>
+      <span class="when">10月8日 周四 18:30–20:00 · 东教D108</span></div>
+    <div class="row"><div class="k">匹配</div><div class="v">
+      <span class="badge b-city">南京 ✔ 强</span><span class="badge b-mid">专业 ◐ 中</span></div></div>
+    <div class="row"><div class="k">南京地址</div><div class="v">江苏省南京市高淳经济技术开发区双湖路59号（上交所主板上市，605088）</div></div>
+    <div class="row"><div class="k">岗位</div><div class="v">
+      生产运营类的 <b>开发工艺 / 质量管理 / 生产管理</b> 三个岗位，工作地点明确标注「<b>温州 / 南京</b>」；
+      营销支持助理为「温州 / 南京 / 嘉兴」</div></div>
+    <div class="row"><div class="k">专业要求</div><div class="v">机械工程、车辆工程、工业工程、机械电子、自动化、测控技术与仪器</div></div>
+    <div class="row"><div class="k">薪酬</div><div class="v">综合收入 8W–26W，五险一金、股权激励、双休</div></div>
+    <div class="why"><span class="t">为什么排第一：</span>这是 17 场里<b>唯一一家在南京有实体生产/运营岗位</b>的制造业单位。
+      主营等速万向节、传动轴、轮毂轴承等汽车底盘件，属典型的<b>金属材料加工与热处理</b>领域，材料背景投「开发工艺」「质量管理」有说服力。
+      简章未直接写「材料」，但也没写死专业——<b>现场务必主动问 HR：南京基地是否接收材料科学与工程专业</b>。</div>
+    <div class="why warn"><span class="t">注意：</span>招聘主体为冠盛股份，南京只是基地之一，需确认岗位最终分配地；不要默认一定留在南京。</div>
+  </div>
+
+  <div class="card">
+    <div class="card-hd"><span class="rank t1">2</span><span class="co">中国电子系统工程第二建设有限公司（中电二公司）</span>
+      <span class="when">10月9日 周五 19:00–20:30 · 东教D107</span></div>
+    <div class="row"><div class="k">匹配</div><div class="v">
+      <span class="badge b-hi">专业 ✔ 强</span><span class="badge b-mid">南京 ◐ 中</span></div></div>
+    <div class="row"><div class="k">对口岗位</div><div class="v">
+      <b>工艺设计师（硕士，4人）</b>：电子科学与技术、集成电路工程、<b>材料科学与工程</b>、化学工程与工艺、制药工程<br>
+      <b>咨询工程师（硕士，2人，子公司中瑞科技）</b>：电子信息类、物理类、化工类、<b>材料类</b>等工科专业</div></div>
+    <div class="row"><div class="k">城市</div><div class="v">总部<b>江苏无锡</b>；社保公积金可缴城市明确列出「无锡、上海、<b>南京</b>、杭州、北京…」共 14 城</div></div>
+    <div class="row"><div class="k">背景</div><div class="v">世界 500 强央企 CEC 旗下，员工 7000+，服务电子/大健康/数算中心/新能源等高科技制造</div></div>
+    <div class="why"><span class="t">为什么值得去：</span>全场<b>唯一把「材料科学与工程」写进招聘专业、且社保可落在南京</b>的单位，江苏本地、央企平台。
+      材料岗做的是半导体/新能源工厂的工艺设计，与材料专业对口度高。</div>
+    <div class="why warn"><span class="t">注意：</span>材料相关岗<b>全部要求硕士</b>，且名额极少（4+2 人），本科同学只能走建造岗（机电/暖通方向）；
+      工程类央企岗位随项目流动，<b>南京是社保缴纳地、不等于常驻南京</b>，要当面问清。</div>
+  </div>
+
+  <div class="card">
+    <div class="card-hd"><span class="rank t1">3</span><span class="co">淮北矿业（集团）有限责任公司</span>
+      <span class="when">9月28日 周一 10:00–11:30 · 东教D207</span></div>
+    <div class="row"><div class="k">匹配</div><div class="v">
+      <span class="badge b-hi">专业 ✔ 强</span><span class="badge b-mid">徐州 ◐ 中（地理邻近）</span></div></div>
+    <div class="row"><div class="k">对口岗位</div><div class="v"><b>化工类（35 人）</b>明确列出：化学工程与技术、能源化学工程、化工安全工程、<b>材料科学与工程</b>、弹药工程与爆炸技术等</div></div>
+    <div class="row"><div class="k">地点</div><div class="v">安徽省淮北市人民中路276号 —— <b>紧邻徐州，约 60 km，同属淮海经济区 / 徐州都市圈</b></div></div>
+    <div class="row"><div class="k">待遇</div><div class="v">第一年：地面岗年薪 <b>≥8 万</b>，井下相关岗 <b>≥12 万</b>；五险一金 + 探亲假 + 免费住宿</div></div>
+    <div class="row"><div class="k">规模</div><div class="v">资产超 1000 亿，中国企业 500 强第 302 位，在岗 4.5 万人，含 6 家化工新材料企业</div></div>
+    <div class="why"><span class="t">为什么单列：</span>如果你的核心诉求是<b>离徐州近</b>，这是 17 场里唯一地理上够得着的选择——
+      淮北与徐州接壤，日常往返/安家都很现实，且明确招材料专业。</div>
+    <div class="why warn"><span class="t">注意：</span>工作地是<b>淮北不是徐州</b>；「材料科学与工程」被归在化工类，方向偏化工新材料；
+      简历投递后由集团统一分配单位，具体地点和岗位不完全可控。</div>
+  </div>
+
+  <h2 class="sec">第二优先级<span>材料专业高度对口，但城市不符</span></h2>
+  <p class="sub">共 4 家。你若愿意为专业对口放宽城市，这批是本轮最好的技术岗机会。</p>
+
+  <div class="card">
+    <div class="card-hd"><span class="rank t2">4</span><span class="co">深南电路股份有限公司</span>
+      <span class="when">10月13日 周二 16:00–18:00 · 东教D207</span></div>
+    <div class="row"><div class="k">匹配</div><div class="v">
+      <span class="badge b-hi">专业 ✔ 最强（岗位数最多）</span><span class="badge b-lo">城市 ✘</span></div></div>
+    <div class="row"><div class="k">对口岗位</div><div class="v">
+      <b>工艺研发岗 114 人</b>：化学类、<b>材料类</b>、机械类、电子类、物理类<br>
+      <b>产品研发岗 34 人</b>：化学类、<b>材料类</b>（硕士方向含高分子材料、<b>材料科学与工程</b>、复合材料与工程、材料结构力学）<br>
+      <b>质量管理岗 45 人</b>：优先<b>材料类</b>、化学类<br>
+      <b>采购岗（技术方向）</b>：材料化学、高分子系列等</div></div>
+    <div class="row"><div class="k">地点</div><div class="v">深圳 / 广州 / <b>无锡</b> / 南通，及泰国。
+      工艺研发：深圳43 广州14 <b>无锡34</b> 南通23；产品研发：深圳11 <b>无锡11</b> 南通12</div></div>
+    <div class="why"><span class="t">为什么值得去：</span>本轮<b>材料类岗位数量最多、方向最全</b>的一家（仅材料相关岗就 190+ 人），
+      PCB 龙头、做高分子复合材料与电子封装，专业契合度极高。
+      其中 <b>无锡基地离南京高铁 1 小时出头</b>，是「专业对口」与「离家近」之间最好的折中点。</div>
+    <div class="why warn"><span class="t">注意：</span>无南京、无徐州岗位；无锡名额需竞争，投简历时<b>务必在邮件/网申里注明意向工作地</b>。</div>
+  </div>
+
+  <div class="card">
+    <div class="card-hd"><span class="rank t2">5</span><span class="co">中伟新材料股份有限公司</span>
+      <span class="when">9月29日 周二 14:30–16:00 · 东教D207</span></div>
+    <div class="row"><div class="k">匹配</div><div class="v">
+      <span class="badge b-hi">专业 ✔ 强</span><span class="badge b-lo">城市 ✘（印尼外派）</span></div></div>
+    <div class="row"><div class="k">对口岗位</div><div class="v">
+      生产管理类：<b>金属材料工程</b>、冶金工程、化学工程、工业工程<br>
+      品质管理类：化学、化工、冶金工程、<b>金属材料</b><br>
+      研发技术类：冶金工程、化学工程　｜　采购物流类：含<b>材料类</b></div></div>
+    <div class="row"><div class="k">地点</div><div class="v"><b>印度尼西亚</b>——雅加达、中苏拉威西省、东南苏拉威西省</div></div>
+    <div class="why"><span class="t">亮点：</span>全球新能源材料头部企业（300919.SZ / 02579.HK），营收超 500 亿，做的是镍钴磷钠锂新能源材料，
+      与材料专业高度对口，平台与薪酬空间大。</div>
+    <div class="why warn"><span class="t">劝退点：</span>本次招聘的是<b>印尼大区</b>，需长期驻外。若你不能接受海外，可以直接跳过。</div>
+  </div>
+
+  <div class="card">
+    <div class="card-hd"><span class="rank t2">6</span><span class="co">阳春新钢铁有限责任公司</span>
+      <span class="when">10月9日 周五 14:30–16:00 · 东教D112</span></div>
+    <div class="row"><div class="k">匹配</div><div class="v">
+      <span class="badge b-hi">专业 ✔ 强（冶金方向）</span><span class="badge b-lo">城市 ✘</span></div></div>
+    <div class="row"><div class="k">对口岗位</div><div class="v"><b>冶金材料类</b>：冶金工程 / <b>材料成型及控制工程</b> / <b>金属材料工程</b> / 矿物加工工程（烧结球团方向）</div></div>
+    <div class="row"><div class="k">地点</div><div class="v">广东省阳春市潭水镇南山工业区（国企，世界 500 强湖南钢铁集团旗下）</div></div>
+    <div class="row"><div class="k">待遇</div><div class="v">试用期研究生 7100/月、本科 6100/月；<b>安家费本科 1 万、研究生 5 万</b>；七险两金、免费单人公寓</div></div>
+    <div class="why"><span class="t">亮点：</span>如果你的材料方向偏<b>金属材料 / 成型控制 / 冶金</b>，这是专业最对口的一家，国企稳定、安家费实在。</div>
+    <div class="why warn"><span class="t">劝退点：</span>广东阳春，与南京/徐州都很远。</div>
+  </div>
+
+  <div class="card">
+    <div class="card-hd"><span class="rank t2">7</span><span class="co">豪迈集团股份有限公司</span>
+      <span class="when">10月12日 周一 18:30–20:00 · 东教D210</span></div>
+    <div class="row"><div class="k">匹配</div><div class="v">
+      <span class="badge b-hi">专业 ✔ 强</span><span class="badge b-lo">城市 ✘</span></div></div>
+    <div class="row"><div class="k">对口方向</div><div class="v">简章涵盖 <b>材料学、材料成型、高分子、金属材料、材料工程</b> 等多个材料方向</div></div>
+    <div class="row"><div class="k">地点</div><div class="v">山东潍坊高密（主）、日照、青岛、威海乳山，及<b>江苏启东</b></div></div>
+    <div class="why"><span class="t">亮点：</span>机械/轮胎模具龙头，材料岗方向多，本科可投。<b>江苏启东</b>是其省外基地之一，可询问是否有江苏名额。</div>
+    <div class="why warn"><span class="t">劝退点：</span>主力在山东，无南京/徐州。</div>
+  </div>
+
+  <h2 class="sec">第三优先级<span>仅单项沾边，可顺带了解</span></h2>
+  <p class="sub">共 4 家。有兴趣可去，但不要抱太高期望。</p>
+
+  <div class="card">
+    <div class="card-hd"><span class="rank t3">8</span><span class="co">深圳市一博科技股份有限公司</span>
+      <span class="when">10月15日 周四 10:30–12:00 · 东教D105</span></div>
+    <div class="row"><div class="k">匹配</div><div class="v"><span class="badge b-mid">专业 ◐</span><span class="badge b-mid">南京 ◐</span>（但两者错配）</div></div>
+    <div class="why warn"><span class="t">关键提醒——这是一个"错位陷阱"：</span>
+      招材料的岗位（质量管理岗「材料与化工、<b>材料科学与工程</b>」、工艺岗「高分子材料」、产品研发岗「材料科学」）工作地<b>全部在珠海</b>；
+      而<b>南京</b>只出现在「硬件工程师（PCB 设计）」的工作地列表里，该岗要求<b>电子/通信/自动化/微电子</b>专业。
+      也就是说：南京有岗但你专业不对口，你专业对口的岗在珠海。除非你愿意去珠海，否则这场价值有限。</div>
+  </div>
+
+  <div class="card">
+    <div class="card-hd"><span class="rank t3">9</span><span class="co">大族激光科技产业集团</span>
+      <span class="when">10月8日 周四 16:00–17:30 · 东教D110</span></div>
+    <div class="row"><div class="k">匹配</div><div class="v"><span class="badge b-mid">专业 ◐</span><span class="badge b-lo">城市 ✘</span></div></div>
+    <div class="row"><div class="k">对口点</div><div class="v">管培生岗位明确招 <b>材料成型、焊接</b> 等专业；培养方向含「工艺」——做激光加工工艺、<b>新材料新行业应用工艺开发</b></div></div>
+    <div class="row"><div class="k">地点</div><div class="v">深圳、张家港、常州、天津、长沙、苏州、济南（<b>常州/苏州离南京较近</b>，但无南京岗）</div></div>
+    <div class="why"><span class="t">建议：</span>管培生轮岗后定岗，材料背景可争取「工艺向」。若你看重激光加工/材料工艺方向，可去；城市不匹配。</div>
+  </div>
+
+  <div class="card">
+    <div class="card-hd"><span class="rank t3">10</span><span class="co">中国电建集团山东电力建设第三工程有限公司</span>
+      <span class="when">10月15日 周四 14:55–16:30 · 宣讲一厅</span></div>
+    <div class="row"><div class="k">匹配</div><div class="v"><span class="badge b-mid">专业 ◐</span><span class="badge b-lo">城市 ✘</span></div></div>
+    <div class="row"><div class="k">对口点</div><div class="v">涉及 <b>材料成型、金属材料</b>（焊接、金属检测方向）</div></div>
+    <div class="row"><div class="k">地点</div><div class="v">山东省青岛市崂山区；电力建设工程单位，岗位随项目流动</div></div>
+    <div class="why"><span class="t">建议：</span>偏向焊接/无损检测等金属方向才值得考虑；地点青岛，与南京/徐州无关。</div>
+  </div>
+
+  <div class="card">
+    <div class="card-hd"><span class="rank t3">11</span><span class="co">弘创集团－南京骐岳宣讲会</span>
+      <span class="when">10月12日 周一 14:00–16:00 · 宣讲一厅</span></div>
+    <div class="row"><div class="k">匹配</div><div class="v"><span class="badge b-lo">专业 ✘</span><span class="badge b-hi">南京 ✔</span></div></div>
+    <div class="row"><div class="k">地点</div><div class="v">南京市雨花台区凤集大道创业创新城（南京本地，五险一金在南京）</div></div>
+    <div class="row"><div class="k">岗位</div><div class="v">B2B技术销售 20 名、电气技术工程师 5 名、采购 3 名、财务 3 名、区域市场拓展 5 名</div></div>
+    <div class="row"><div class="k">专业要求</div><div class="v">自动化、机电、测控技术与仪器等——<b>不招材料</b></div></div>
+    <div class="why warn"><span class="t">建议：</span>地点在南京，但岗位是<b>工业自动化销售/电气</b>，与材料专业不对口；
+      薪资也偏低（试用期 4000–10000 元，转正 5000–2 万）。<b>只有当你想转销售/留在南京时才值得去</b>。</div>
+  </div>
+
+  <h2 class="sec">基本不相关<span>专业与城市均不匹配，可忽略</span></h2>
+  <table>
+    <thead><tr><th>单位</th><th>时间</th><th>原因</th></tr></thead>
+    <tbody>
+      <tr><td>安徽悦联商业管理有限公司</td><td>9/28 17:30 东教D105</td><td>商业管理类，无材料相关岗位</td></tr>
+      <tr><td>海天集团</td><td>9/28 18:30 东教一阶202</td><td>宁波，主要招机械/电气/自动化</td></tr>
+      <tr><td>芜湖伯特利汽车安全系统</td><td>10/9 18:30 东教D207</td><td>芜湖，岗位以机械/车辆/电子为主</td></tr>
+      <tr><td>浙江三花智能控制</td><td>10/9 18:30 东教D110</td><td>浙江，简章未列出材料类专业需求</td></tr>
+      <tr><td>艾迪西流体控制集团</td><td>10/12 18:30 东教D207</td><td>宁波/嘉兴/台州，仅机械类、品质类、营销类</td></tr>
+      <tr><td>罗莱生活科技</td><td>10/14 18:30 东教D108</td><td>上海/南通，家纺行业，简章未明确材料类专业</td></tr>
+    </tbody>
+  </table>
+
+  <h2 class="sec">总览对照表<span>17 场逐一评分</span></h2>
+  <table>
+    <thead><tr><th>日期</th><th>单位</th><th>专业匹配</th><th>城市匹配</th><th>建议</th></tr></thead>
+    <tbody>
+      <tr><td>9/28</td><td>淮北矿业（集团）</td><td><span class="badge b-hi">强</span>化工类招材料科学与工程 35人</td><td><span class="badge b-mid">中</span>淮北紧邻徐州</td><td><b>必去</b></td></tr>
+      <tr><td>9/28</td><td>安徽悦联商业管理</td><td><span class="badge b-lo">弱</span></td><td><span class="badge b-lo">弱</span></td><td>忽略</td></tr>
+      <tr><td>9/28</td><td>海天集团</td><td><span class="badge b-lo">弱</span></td><td><span class="badge b-lo">弱</span>宁波</td><td>忽略</td></tr>
+      <tr><td>9/29</td><td>中伟新材料</td><td><span class="badge b-hi">强</span>金属材料/冶金/材料类</td><td><span class="badge b-lo">弱</span>印尼外派</td><td>能接受驻外则去</td></tr>
+      <tr><td>10/8</td><td>大族激光</td><td><span class="badge b-mid">中</span>材料成型/焊接</td><td><span class="badge b-lo">弱</span>深圳等</td><td>可选</td></tr>
+      <tr><td>10/8</td><td><b>南京冠盛汽配</b></td><td><span class="badge b-mid">中</span>工艺/质量岗可投</td><td><span class="badge b-hi">强</span>南京高淳</td><td><b>必去</b></td></tr>
+      <tr><td>10/9</td><td><b>中电二公司</b></td><td><span class="badge b-hi">强</span>明确招材料科学与工程</td><td><span class="badge b-mid">中</span>无锡总部，社保可落南京</td><td><b>必去</b>（限硕士）</td></tr>
+      <tr><td>10/9</td><td>阳春新钢铁</td><td><span class="badge b-hi">强</span>冶金材料类</td><td><span class="badge b-lo">弱</span>广东阳春</td><td>材料偏金属则去</td></tr>
+      <tr><td>10/9</td><td>芜湖伯特利</td><td><span class="badge b-lo">弱</span></td><td><span class="badge b-lo">弱</span>芜湖</td><td>忽略</td></tr>
+      <tr><td>10/9</td><td>浙江三花</td><td><span class="badge b-lo">弱</span></td><td><span class="badge b-lo">弱</span>浙江</td><td>忽略</td></tr>
+      <tr><td>10/12</td><td>弘创-南京骐岳</td><td><span class="badge b-lo">弱</span>不招材料</td><td><span class="badge b-hi">强</span>南京雨花台</td><td>想留南京做销售才去</td></tr>
+      <tr><td>10/12</td><td>艾迪西流体控制</td><td><span class="badge b-mid">中</span>阀门/铸造</td><td><span class="badge b-lo">弱</span>宁波等</td><td>可选</td></tr>
+      <tr><td>10/12</td><td>豪迈集团</td><td><span class="badge b-hi">强</span>材料学/成型/高分子/金属</td><td><span class="badge b-lo">弱</span>山东（含江苏启东）</td><td>可选</td></tr>
+      <tr><td>10/13</td><td><b>深南电路</b></td><td><span class="badge b-hi">最强</span>材料类岗 190+ 人</td><td><span class="badge b-mid">中</span>无锡离南京最近</td><td><b>必去</b></td></tr>
+      <tr><td>10/14</td><td>罗莱生活科技</td><td><span class="badge b-mid">中</span>纺织材料</td><td><span class="badge b-lo">弱</span>上海/南通</td><td>可选</td></tr>
+      <tr><td>10/15</td><td>深圳一博科技</td><td><span class="badge b-mid">中</span>材料岗在珠海</td><td><span class="badge b-mid">中</span>南京岗需电子专业</td><td>注意错位</td></tr>
+      <tr><td>10/15</td><td>中国电建山东电建三</td><td><span class="badge b-mid">中</span>材料成型/金属</td><td><span class="badge b-lo">弱</span>青岛</td><td>可选</td></tr>
+    </tbody>
+  </table>
+
+  <div class="todo">
+    <h3>给你的行动清单</h3>
+    <ol>
+      <li><b>9/28（周一）上午 10:00 淮北矿业</b>——徐州意向的唯一现实选项，当天就去，问清化工新材料方向的分配地点。</li>
+      <li><b>10/8（周四）晚上 18:30 南京冠盛汽配</b>——唯一南京实体岗，<b>现场一定要问 HR：材料科学与工程专业能否投南京基地的开发工艺/质量岗</b>。</li>
+      <li><b>10/9（周五）晚上 19:00 中电二公司</b>——若你是硕士，这是唯一写明招材料且社保能落南京的单位；本科生需转投建造岗。</li>
+      <li><b>10/13（周二）下午 16:00 深南电路</b>——材料岗位最多最对口，投简历时<b>明确标注意向工作地填「无锡」</b>，兼顾专业与离家距离。</li>
+      <li><b>关于徐州：本轮 17 场没有任何单位是徐州的。</b>建议同步关注徐工集团、徐州矿务集团等本地企业的独立招聘，别只盯学校的宣讲日历。</li>
+      <li>材料方向的额外机会：若你能接受广东/山东/海外，<b>10/9 阳春新钢铁</b>（冶金材料，国企+安家费）和 <b>10/12 豪迈集团</b> 性价比不错。</li>
+    </ol>
+  </div>
+
+  <footer>
+    数据来源：ahut.ahbys.com 招聘日历及各单位官方招聘简章（逐份比对「需求专业」与「工作地点」字段）<br>
+    统计于 2026-09-27。招聘信息可能随时调整，请以现场宣讲与官网为准。
+  </footer>
+
+</div>
+</body>
+</html>

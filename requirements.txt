@@ -1,0 +1,8 @@
+# 本项目仅依赖 Python 标准库即可运行（urllib / json / html / datetime / argparse）。
+# 下面列出可选依赖，仅在需要时安装。
+
+# 更友好的 HTTP 客户端（可选，安装后自动启用连接池与重试）
+# requests>=2.31.0
+
+# 单元测试（可选）
+# pytest>=7.4.0

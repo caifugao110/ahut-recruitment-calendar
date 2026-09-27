@@ -1,0 +1,38 @@
+# Python
+__pycache__/
+*.py[cod]
+*.egg-info/
+.venv/
+venv/
+env/
+
+# 抓取产物
+# dataset.json 是累计数据集，需要入库（CI 每次在此基础上增量更新，也便于追溯历史）
+data/snapshot/
+data/cache/
+
+# 生成的站点（由 CI 构建并通过 Pages 制品部署，不入库，避免每日提交撑大仓库）
+site/
+
+# WorkBuddy 项目数据（本地记忆与会话数据，不入库）
+.workbuddy/
+
+# 本地环境与凭据
+.env
+.env.*
+*.token
+.mashangjia/
+
+# 编辑器 / 系统
+.vscode/
+.idea/
+.DS_Store
+Thumbs.db
+
+# 日志
+*.log
+
+# 部署回执（含认领信息，绝不入库）
+deploy_out.json
+deploy_err.log
+live.html

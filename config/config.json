@@ -1,0 +1,24 @@
+{
+  "site": {
+    "name": "安徽工业大学 · 招聘日历",
+    "base_url": "https://ahut.ahbys.com",
+    "calendar_url": "https://ahut.ahbys.com/RecruitCalendar.html",
+    "api_path": "/API/Web/Recruit.ashx",
+    "detail_url": "https://ahut.ahbys.com/Recruit.html?id={id}"
+  },
+  "range": {
+    "start": "2026-09-01",
+    "end": "2026-12-31"
+  },
+  "request": {
+    "timeout": 30,
+    "retries": 3,
+    "delay_seconds": 0.15,
+    "user_agent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/124.0 Safari/537.36"
+  },
+  "output": {
+    "site_dir": "site",
+    "data_dir": "data",
+    "index_name": "index.html"
+  }
+}

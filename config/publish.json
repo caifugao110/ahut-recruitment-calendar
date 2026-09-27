@@ -1,0 +1,8 @@
+{
+  "_comment": "发布配置。mode 可选 auto / anonymous / account。",
+  "mode": "auto",
+  "project_dir": "site",
+
+  "_note_anonymous": "匿名模式每次部署都是新项目、新地址，且临时站约 24 小时后预览过期。想让同一个固定地址每天更新，请先 mashangjia login --token <token>（或认领已有站点），再用 account 模式部署。",
+  "_note_account": "account 模式需要本机已登录或提供 MASHANGJIA_API_TOKEN，失败时不会回退匿名。"
+}
