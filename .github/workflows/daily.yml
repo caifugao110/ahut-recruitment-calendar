@@ -5,13 +5,16 @@
 #   97 次请求跨洋要十几分钟；放进境内云函数后只要约 46 秒，
 #   跨洋环节从「97 次请求」压缩成「云函数提交 dataset.json」这 1 次。
 #
-# 触发方式（三条，前两条可能撞车，用 concurrency 排队）：
-#   A. push data/dataset.json —— 主链路。云函数抓完提交后自动触发本工作流。
-#   B. schedule              —— 兜底。云函数万一没跑，每天仍会用已有数据重建一次站点。
-#   C. workflow_dispatch      —— Actions 页面手动触发。
+# 触发方式（两条，可能撞车，用 concurrency 排队）：
+#   A. workflow_dispatch —— 主链路。云函数把数据提交到 data 分支后，主动调本接口（ref=main）。
+#   B. schedule          —— 兜底。云函数万一没跑或 dispatch 失败，每天仍会用已有数据重建一次站点。
 #
-# ★ 重要：本工作流不再回写 data/dataset.json（权限只给 contents: read）。
-#   如果在这里提交，会再次触发 A 形成死循环 —— 数据写入统一由云函数负责。
+# ★ 为什么没有 push 触发器：数据落在 data 分支而非 main，而 push 触发器只认「被推送分支上
+#   存在的工作流文件」—— data 分支上没有（也不该有）工作流副本，所以 push 路线不通。
+#   dispatch 方式让工作流文件只存在于 main，永远以最新版本运行，不会漂移。
+#
+# ★ 重要：本工作流不回写任何分支的 data/dataset.json（权限只给 contents: read）。
+#   数据写入统一由云函数负责，落到 data 分支；main 保持不被自动化改动。
 #
 # 部署云函数后，config/config.json -> profile.schedule.daily_at 要同步到
 # 云函数的定时触发器（北京时间，不用换算 UTC）。本文件里的 cron 仍需与 config 一致，
@@ -33,20 +36,15 @@
 name: daily-update
 
 on:
-  push:
-    branches: [main]
-    paths:
-      - data/dataset.json     # 云函数提交数据后自动触发；只改代码不会误触发部署
-
   schedule:
     # UTC 18:00 = 北京时间次日 02:00（由 config/config.json -> profile.schedule 生成，改时间后运行 python scripts/sync_workflow.py）
-    # 兜底用：云函数没跑时，至少用已有数据重建一次站点
+    # 兜底用：云函数没跑或 dispatch 失败时，至少用已有数据重建一次站点
     - cron: "0 18 * * *"
 
-  workflow_dispatch:      # 允许在 Actions 页面手动触发
+  workflow_dispatch:      # 主链路：云函数提交数据后调此接口；也可在 Actions 页面手动触发
 
 concurrency:
-  group: daily-update     # push 与 schedule 撞车时排队，不并发部署
+  group: daily-update     # dispatch 与 schedule 撞车时排队，不并发部署
   cancel-in-progress: false
 
 jobs:
@@ -55,7 +53,7 @@ jobs:
     timeout-minutes: 15   # 不再抓取，正常几十秒；设上限防止异常时一直挂着
 
     permissions:
-      contents: read      # 只读：数据由云函数写入，这里不回写（回写会循环触发）
+      contents: read      # 只读：数据由云函数写入 data 分支，这里只取不写
       pages: write        # 部署 GitHub Pages
       id-token: write     # Pages OIDC
 
@@ -70,6 +68,8 @@ jobs:
     steps:
       - name: 检出代码
         uses: actions/checkout@v4
+        with:
+          ref: main        # 显式写出：dispatch / schedule 都跑 main 上的最新工作流
 
       - name: 准备 Python
         uses: actions/setup-python@v5
@@ -78,6 +78,22 @@ jobs:
 
       - name: 校验自动更新时间
         run: python scripts/sync_workflow.py --check
+
+      - name: 获取数据集（data 分支）
+        # 数据集由云函数提交到独立的 data 分支（main 不被自动化改动），这里跨分支取回来。
+        # 仓库是公开的，raw.githubusercontent.com 无需鉴权。
+        # 注意 curl -o 即使拿到 404 也会把错误文本写进文件，所以回退分支要用 git checkout 还原。
+        run: |
+          mkdir -p data
+          STATUS=$(curl -sSL -o data/dataset.json -w "%{http_code}" \
+            "https://raw.githubusercontent.com/${{ github.repository }}/data/data/dataset.json" || true)
+          if [ "$STATUS" = "200" ]; then
+            echo "已从 data 分支获取数据集（$(wc -c < data/dataset.json) bytes）"
+          else
+            echo "⚠️ data 分支拉取失败（HTTP $STATUS），回退 main 分支自带副本"
+            git checkout -- data/dataset.json 2>/dev/null || true
+            ls -l data/dataset.json || echo "⚠️ main 分支也没有 dataset.json"
+          fi
 
       - name: 生成站点
         # --from-dataset：跳过抓取，直接用云函数提交的 data/dataset.json 重建页面，

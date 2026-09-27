@@ -7,8 +7,9 @@ venv/
 env/
 
 # ==================== 抓取产物 ====================
-# 注意：data/dataset.json 是累计数据集，需要入库
-# （CI 每次在此基础上增量更新，也便于追溯历史），不要把整个 data/ 屏蔽掉。
+# 注意：data/dataset.json 的最新副本由云函数提交到独立的 data 分支，
+# main 上这份只是历史副本，仅在 data 分支拉取失败时作回退用（见 .github/workflows/daily.yml）。
+# 稳定后可自行 `git rm --cached data/dataset.json` 从 main 移除。
 data/snapshot/
 data/cache/
 

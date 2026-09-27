@@ -9,14 +9,22 @@ scf/index.py —— 腾讯云函数 SCF 入口：抓取招聘会，并把结果�
 
 链路：
     云函数（境内，定时触发）──抓取──> 招聘会数据
-        ──1 次 Contents API 提交──> data/dataset.json
-            ──push 事件──> GitHub Actions（境外）生成站点 + 部署 Pages + 发布码上架
+        ──Contents API 提交──> data 分支的 data/dataset.json（main 不被自动化改动）
+            ──workflow_dispatch(ref=main)──> GitHub Actions（境外）
+                                             生成站点 + 部署 Pages + 发布码上架
+
+为什么提交到独立的 data 分支、再用 dispatch 触发：
+    main 留作代码分支，不被每日的数据提交污染。GitHub Actions 的 push 触发器只认
+    「被推送分支上存在的工作流文件」，孤儿分支不触发、带副本的数据分支又会让工作流
+    跑旧副本；所以这里改为「提交到 data 分支 + 主动调 workflow_dispatch(ref=main)」，
+    工作流文件只存在于 main，永远以最新版本运行，零漂移。
 
 环境变量（在 SCF 控制台「函数配置 → 环境变量」里填）：
-    GITHUB_TOKEN   必填。Personal Access Token，需 Contents: Read and write 权限。
+    GITHUB_TOKEN   必填。Personal Access Token，需 Contents 与 Actions 均为
+                   Read and write 权限（classic PAT 勾 repo 即天然包含两者）。
                    注意：要用 PAT，不能用 Actions 自带的 GITHUB_TOKEN —— 后者创建的
-                   commit 不会再触发 workflow，链路就断了。
-    GITHUB_BRANCH  可选，默认 main。
+                   commit 不会再触发 workflow，且没有 dispatch 权限，链路就断了。
+    GITHUB_BRANCH  可选，默认 data（数据分支）。填 main 即回滚到旧行为。
     DRY_RUN        可选，设为 1 时只跑抓取与合并、打印将要提交的内容，不真的写仓库。
     SCF_DATA_DIR   可选，详情缓存目录，默认 /tmp/ahut-recruitment-calendar
                    （云函数代码目录是只读的，只能写 /tmp）。
@@ -31,6 +39,7 @@ from __future__ import annotations
 
 import base64
 import datetime as dt
+import http.client
 import json
 import os
 import sys
@@ -68,7 +77,9 @@ from src.dataset import (  # noqa: E402
 from src.scraper import Scraper  # noqa: E402
 from src.timeutil import cn_today  # noqa: E402
 
-DEFAULT_BRANCH = "main"
+DEFAULT_BRANCH = "data"        # 数据分支：每日抓取只写它，main 保持不被自动化改动
+BASE_BRANCH = "main"           # 代码分支：ensure_branch 的派生来源、dispatch 的目标 ref
+WORKFLOW_FILE = "daily.yml"    # 提交成功后要触发的工作流
 GITHUB_API = "https://api.github.com"
 DATASET_PATH = "data/dataset.json"
 USER_AGENT = "ahut-recruitment-calendar-scf"
@@ -85,10 +96,10 @@ class GitHubError(RuntimeError):
 
 
 class GitHubContents:
-    """极简 Contents API 客户端，只用到「读一个文件」和「写一个文件」。"""
+    """极简 GitHub API 客户端，只用到「读文件 / 写文件 / 建分支 / 触发工作流」。"""
 
     def __init__(self, repo: str, token: str, branch: str = DEFAULT_BRANCH,
-                 timeout: float = 15.0, retries: int = 3) -> None:
+                 timeout: float = 30.0, retries: int = 3) -> None:
         self.repo = repo
         self.token = token
         self.branch = branch
@@ -111,15 +122,21 @@ class GitHubContents:
                     raw = resp.read().decode("utf-8", errors="replace")
                 return json.loads(raw) if raw else {}
             except urllib.error.HTTPError as exc:
-                # 4xx 是确定性错误，重试没有意义，直接抛出
+                # 4xx 是确定性错误，重试没有意义，直接抛出；5xx 多半是瞬时故障，照样重试
                 detail = ""
                 try:
                     detail = exc.read().decode("utf-8", errors="replace")[:300]
                 except Exception:  # noqa: BLE001
                     pass
-                raise GitHubError(f"{method} {url} -> HTTP {exc.code} {detail}",
-                                  code=exc.code) from exc
-            except (urllib.error.URLError, TimeoutError, json.JSONDecodeError, OSError) as exc:
+                if exc.code < 500 or attempt >= self.retries:
+                    raise GitHubError(f"{method} {url} -> HTTP {exc.code} {detail}",
+                                      code=exc.code) from exc
+                print(f"      第 {attempt} 次请求失败（HTTP {exc.code}），{2 * attempt}s 后重试")
+                time.sleep(2 * attempt)
+            except (urllib.error.URLError, TimeoutError, json.JSONDecodeError,
+                    OSError, http.client.HTTPException) as exc:
+                # dataset.json 现在有 500+ KB，跨国读它偶发「读到一半断开」
+                # （http.client.IncompleteRead），这类错误重试即可，所以要一并接住。
                 last = exc
                 if attempt < self.retries:
                     print(f"      第 {attempt} 次请求失败（{exc}），{2 * attempt}s 后重试")
@@ -139,6 +156,37 @@ class GitHubContents:
         content = payload.get("content") or ""
         text = base64.b64decode(content).decode("utf-8") if content else ""
         return text, payload.get("sha")
+
+    def ensure_branch(self, branch: str, base: str = BASE_BRANCH) -> None:
+        """确保数据分支存在（幂等，正常情况只花 1 次 API 调用）。
+
+        不存在时从 base（main）派生：取 heads/main 的 sha，POST /git/refs 建出来。
+        """
+        try:
+            self._request("GET", f"{GITHUB_API}/repos/{self.repo}/git/ref/heads/"
+                                 f"{urllib.parse.quote(branch)}")
+            return
+        except GitHubError as exc:
+            if exc.code != 404:
+                raise
+        ref = self._request("GET", f"{GITHUB_API}/repos/{self.repo}/git/ref/heads/"
+                                   f"{urllib.parse.quote(base)}")
+        sha = (ref.get("object") or {}).get("sha")
+        if not sha:
+            raise GitHubError(f"取不到 {base} 分支的 sha，无法派生 {branch}：{ref}")
+        self._request("POST", f"{GITHUB_API}/repos/{self.repo}/git/refs",
+                      {"ref": f"refs/heads/{branch}", "sha": sha})
+        print(f"      已创建 {branch} 分支（从 {base} 派生）")
+
+    def dispatch_workflow(self, workflow: str = WORKFLOW_FILE,
+                          ref: str = BASE_BRANCH) -> None:
+        """触发 ref 分支上的工作流重建站点。
+
+        固定指向 main：工作流文件只存在于 main，这样永远跑最新版本，不会有分支副本漂移。
+        """
+        url = (f"{GITHUB_API}/repos/{self.repo}/actions/workflows/"
+               f"{urllib.parse.quote(workflow)}/dispatches")
+        self._request("POST", url, {"ref": ref})
 
     def put_file(self, path: str, text: str, sha: Optional[str], message: str) -> Dict[str, Any]:
         body: Dict[str, Any] = {
@@ -219,6 +267,7 @@ def run(dry_run: bool = False) -> Dict[str, Any]:
         print(f"      （未配置 GITHUB_TOKEN，改用本地 {local.relative_to(ROOT).as_posix()}）")
         old_text = local.read_text(encoding="utf-8") if local.exists() else None
     else:
+        gh.ensure_branch(branch)        # 幂等；首次运行会创建 data 分支
         old_text, sha = gh.get_file(DATASET_PATH)
     dataset: Dict[str, Dict[str, Any]] = {}
     if old_text:
@@ -247,8 +296,13 @@ def run(dry_run: bool = False) -> Dict[str, Any]:
 
     result = gh.put_file(DATASET_PATH, new_text, sha, today_message(len(dataset), added))
     commit_sha = (result.get("commit") or {}).get("sha", "")
-    print(f"      已提交 {commit_sha[:12] or '(未知)'}")
-    print("      仓库 push 事件会触发 GitHub Actions 重新生成并部署站点")
+    print(f"      已提交 {commit_sha[:12] or '(未知)'} 到 {branch} 分支")
+    try:
+        gh.dispatch_workflow()
+        print(f"      已请求 GitHub Actions 重建站点（{BASE_BRANCH} 上的 {WORKFLOW_FILE}）")
+    except GitHubError as exc:
+        # 失败不致命：工作流还有 schedule 兜底，数据已经落盘，没必要让整次运行失败
+        print(f"      ⚠️ 触发 Actions 失败（{exc}）；数据已提交，等 schedule 兜底重建")
     return {"changed": True, "committed": True, "added": added,
             "total": len(dataset), "in_window": in_window, "commit": commit_sha}
 

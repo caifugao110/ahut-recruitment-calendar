@@ -11,10 +11,18 @@
 ```
 云函数（境内，定时触发）
   └─ 抓取招聘会（约 46 秒）
-     └─ GitHub Contents API 提交 data/dataset.json（1 次跨洋，实测约 6 秒）
-        └─ push 事件触发 GitHub Actions（境外）
-           └─ --from-dataset 生成站点 → 部署 Pages → 发布码上架
+     └─ GitHub Contents API 提交 data/dataset.json → 独立的 data 分支（main 不动）
+        └─ 调用 workflow_dispatch（ref=main）
+           └─ GitHub Actions（境外）：从 data 分支取数据
+              → --from-dataset 生成站点 → 部署 Pages → 发布码上架
 ```
+
+> **为什么提交到 data 分支、再调 dispatch？**
+> main 留作代码分支，不该被每日的数据提交污染。而 GitHub Actions 的 `push` 触发器只认
+> 「被推送分支上存在的工作流文件」—— 数据分支上没有工作流副本就永远不触发，放一份副本
+> 又会跑旧版本、跟着 main 漂移。所以改为提交到 `data` 分支后主动调
+> `workflow_dispatch(ref=main)`：工作流文件只存在于 main，永远跑最新版。
+> 万一 dispatch 失败也不影响数据，工作流自带的 `schedule` 兜底会在次日重建站点。
 
 ---
 
@@ -45,9 +53,13 @@
 | Token name | 随便，比如 `ahut-scf-write` |
 | Expiration | 90 天 / 1 年（Fine-grained 最长 1 年，**到期会失效，见下方提醒**） |
 | Repository access | **Only select repositories** → 只勾本项目仓库 |
-| Permissions → Contents | **Read and write**（只开这一项就够） |
+| Permissions → Contents | **Read and write**（提交 dataset.json 用） |
+| Permissions → Actions | **Read and write**（提交后触发 workflow_dispatch 用） |
 
 4. **Generate token** → 立刻复制保存（**只显示这一次**，关掉就找不回来了）
+
+> 两个权限都要：只有 Contents 的话数据能提交、但 Actions 不会被触发（日志里会有 dispatch
+> 警告，得等 schedule 兜底）。嫌麻烦可以直接用 classic token 勾 `repo`，两项天然包含。
 
 > ⏳ **过期坑**：PAT 到期后云函数会报 `HTTP 401`，站点停止更新（但已有数据不会丢）。
 > 建议设个到期前一周的提醒，到时生成新 token 去 SCF 环境变量里替换。
@@ -97,7 +109,11 @@ DRY_RUN=1 python scf/index.py
 set GITHUB_TOKEN=你刚生成的PAT && python scf/index.py
 ```
 
-看到 `已提交 xxxxxxx` 后去仓库看 commit，并确认 Actions 被触发。
+看到 `已提交 xxxxxxx 到 data 分支` 后，去仓库确认：
+
+- 出现了 `data` 分支且含 `data/dataset.json`（首次运行由云函数自动从 main 派生创建）
+- **main 分支没有新增 commit**
+- Actions 页出现事件类型为 `workflow_dispatch` 的 `daily-update` 运行
 
 ### 4. 推送代码
 
@@ -114,11 +130,14 @@ git add . && git commit -m "feat: 抓取迁移到腾讯云函数" && git push
 1. `Settings → Actions → General → Workflow permissions` 选 **Read and write permissions**
 2. `Settings → Pages → Build and deployment → Source` 选 **GitHub Actions**
 
-改完的工作流只做「生成 + 部署」，触发条件是 `push data/dataset.json`，
-另外保留了一个 `schedule` 兜底（云函数万一没跑，每天仍会重建一次站点）。
+改完的工作流只做「取数据 + 生成 + 部署」，触发条件是：
 
-> 工作流里权限是 `contents: read`：它**不回写** `dataset.json`。
-> 这是刻意的 —— 回写会再次触发 push，形成自我循环。
+- `workflow_dispatch` —— 主链路。云函数提交数据到 `data` 分支后主动调用，也可在 Actions 页手动触发。
+- `schedule` —— 兜底（云函数万一没跑或 dispatch 失败，每天仍会用已有数据重建一次站点）。
+
+> 工作流里权限是 `contents: read`：它**不回写**任何分支的 `dataset.json`，
+> 只用 `raw.githubusercontent.com` 从 `data` 分支把数据取回来（公开仓库，无需鉴权）；
+> 拉取失败时回退 main 上自带的副本。
 
 ## 四、腾讯云：建函数
 
@@ -139,8 +158,8 @@ git add . && git commit -m "feat: 抓取迁移到腾讯云函数" && git push
 
 | 名称 | 值 |
 | --- | --- |
-| `GITHUB_TOKEN` | 第一步生成的 PAT（必填） |
-| `GITHUB_BRANCH` | 默认分支不是 `main` 时才填 |
+| `GITHUB_TOKEN` | 第一步生成的 PAT（必填，需 Contents + Actions 写权限） |
+| `GITHUB_BRANCH` | 默认已是 `data`，不用填；**填 `main` 即回滚到旧的「直接提 main」行为** |
 | `DRY_RUN` | 上线前先填 `1` 跑一次，确认后删掉或改成 `0` |
 
 ### 定时触发器
@@ -174,11 +193,11 @@ Cron 按控制台提示填写，时区为北京时间（Asia/Shanghai），
 | 日志提示 `CLS service is unregistered` | 去控制台开通**日志服务 CLS**（免费额度足够），或调一次 CLS 的 `CreateLogset` 即可激活，然后重建函数 |
 | `MissingParameter: ClsTopicId` | 手动传了 `ClsLogsetId` 却没传 `ClsTopicId`；让 SCF 自动分配最简单（别传这两个参数） |
 | `FileNotFoundError: /var/config/config.json` | 代码包结构不对，zip 根必须是 `index.py` + `src/` + `config/` 三者同级 |
-| `HTTP 401 / 403` | PAT 过期或没开 Contents 写权限（最常见） |
+| `HTTP 401 / 403` | PAT 过期，或没开 Contents / Actions 写权限（最常见） |
 | `HTTP 404` | 分支名不对（配 `GITHUB_BRANCH`）或 PAT 没授权该仓库 |
 | `HTTP 409 / 422` | 远端文件 sha 过期，多因并发提交；重跑一次即可 |
-| 提交成功但 Actions 没触发 | 用的是 Actions 自带 token 而非 PAT，见第一步 |
-| 抓到 0 场 | 对方站点异常；**不会覆盖已有数据**，`dataset.json` 保持不变 |
+| 提交成功但 Actions 没触发 | PAT 缺 **Actions: Read and write**，dispatch 被拒。日志里会有「⚠️ 触发 Actions 失败」；补权限即可，期间靠 schedule 兜底 |
+| 日志出现 `IncompleteRead(...)` / `HTTP 5xx` | 跨国读取 dataset.json（500+ KB）偶发被截断或服务端抖动，脚本会自动重试最多 3 次，成功即无影响；连续 3 次都失败才报错，重跑一次即可 |
 | 函数执行超时被杀 | 把执行超时调大（上限 900 秒），或调小 `config.json -> request.timeout` |
 | 日志停在抓取、报请求失败 | 对方站点临时不可用；脚本会重试，第二天自动补上 |
 

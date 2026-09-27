@@ -266,8 +266,8 @@ copy .env.example .env      # Windows（macOS / Linux 用 cp .env.example .env�
 
 | 阶段 | 在哪跑 | 干什么 | 耗时 |
 | --- | --- | --- | --- |
-| ① 抓数据 | 腾讯云函数（境内） | 抓取招聘会 → 提交 `data/dataset.json` | 约 46 秒 |
-| ② 出站点 | GitHub Actions（境外） | 生成页面 → 部署 Pages → 发布码上架 | 几十秒 |
+| ① 抓数据 | 腾讯云函数（境内） | 抓取招聘会 → 提交 `data/dataset.json` 到独立的 **data 分支** | 约 46 秒 |
+| ② 出站点 | GitHub Actions（境外） | 取数据集 → 生成页面 → 部署 Pages → 发布码上架 | 几十秒 |
 
 **为什么要拆**：数据源 `ahut.ahbys.com` 在国内（安徽电信单机、无 CDN），
 GitHub 托管 runner 在境外，97 次请求跨洋要十几分钟；放进境内云函数后只要约 46 秒，
@@ -280,8 +280,10 @@ GitHub 托管 runner 在境外，97 次请求跨洋要十几分钟；放进境�
 ### 方式 A：云函数 + GitHub Actions（推荐）
 
 1. 按 [scf/README.md](./scf/README.md) 部署云函数：打包 → 建函数 → 填 `GITHUB_TOKEN` → 加定时触发器；
-2. 云函数到点抓取，通过 GitHub API 提交 `data/dataset.json`；
-3. push 事件触发 [daily.yml](./.github/workflows/daily.yml)：生成站点 → 部署 Pages → 发布码上架。
+2. 云函数到点抓取，通过 GitHub API 把 `data/dataset.json` 提交到 **data 分支**（main 不被自动化改动）；
+3. 云函数随即调用 `workflow_dispatch`（ref=main）触发 [daily.yml](./.github/workflows/daily.yml)：
+   从 data 分支取数据集 → 生成站点 → 部署 Pages → 发布码上架。
+   （工作流另保留 `schedule` 兜底，万一云函数没跑或触发失败，每天也会重建一次。）
 
 一次性配置（仓库页面上点选）：
 
@@ -490,7 +492,8 @@ python scripts/publish.py --mode anonymous   # 按目录匿名发布（地址不
 - 是否用了 `--no-detail`：简章缺失时匹配退化为按场次标题弱判断，结果会明显变差。
 
 **GitHub Actions 到点没跑？**
-`schedule` 在高峰期可能延迟几分钟到半小时，属正常现象；确认 `Settings → Actions → General → Workflow permissions` 已选 **Read and write permissions**。推荐方式 A（云函数抓取 + push 触发生成），不依赖 schedule 准点。
+`schedule` 在高峰期可能延迟几分钟到半小时，属正常现象；确认 `Settings → Actions → General → Workflow permissions` 已选 **Read and write permissions**。推荐方式 A（云函数抓取 + `workflow_dispatch` 触发生成），不依赖 schedule 准点。
+另外，主链路靠云函数的 PAT 调 dispatch，PAT 需同时有 **Contents 与 Actions 的 Read and write**；只有 Contents 时数据能提交但不会触发，日志里会有「⚠️ 触发 Actions 失败」。
 
 **Pages 打开还是旧内容？**
 Pages 部署完成有 1~2 分钟传播延迟，浏览器强制刷新（Ctrl+F5）即可。
