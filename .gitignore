@@ -35,4 +35,13 @@ Thumbs.db
 # 部署回执（含认领信息，绝不入库）
 deploy_out.json
 deploy_err.log
+msj_out.json
+msj_err.log
 live.html
+live2.html
+
+# 凭据：Token 只走环境变量或 CI Secret，严禁落到文件里
+.env
+.env.*
+*.token
+config/local.json

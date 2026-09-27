@@ -151,8 +151,11 @@ score = 专业分 + 城市分 × 1.2
 
 之后每天 02:00 自动更新，也可以在 Actions 页面点 **Run workflow** 手动触发。
 
-可选的码上架同步发布：在 `Settings → Secrets and variables → Actions` 添加
-`MASHANGJIA_API_TOKEN` 即可；**未配置时该步骤会自动跳过**，不影响主流程。
+可选的码上架同步发布：在 `Settings → Secrets and variables → Actions` 添加名为
+`MASHANGJIA_LOGIN_TOKEN` 的 Secret 即可；**未配置时该步骤会自动跳过**，不影响主流程。
+
+> ⚠️ Token 只放在 CI Secret 或环境变量里，**不要写进任何文件**。仓库的 `.gitignore`
+> 已屏蔽 `.env*` / `*.token`，`scripts/publish.py` 也只在进程环境里读取它。
 
 ### 方案 B：自建服务器 cron
 

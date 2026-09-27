@@ -6,7 +6,7 @@
 #      地址形如 https://<用户名>.github.io/<仓库名>/
 #   B. 码上架（可选，需要 Secret）
 #      Settings → Secrets and variables → Actions → New repository secret
-#      名称 MASHANGJIA_API_TOKEN，值为码上架控制台生成的 API Token
+#      名称 MASHANGJIA_LOGIN_TOKEN，值为码上架控制台生成的 API Token
 #
 # 一次性配置：Settings → Actions → General → Workflow permissions → 选 Read and write
 #
@@ -35,7 +35,7 @@ jobs:
       url: ${{ steps.pages.outputs.page_url }}
 
     env:
-      MASHANGJIA_API_TOKEN: ${{ secrets.MASHANGJIA_API_TOKEN }}
+      MASHANGJIA_LOGIN_TOKEN: ${{ secrets.MASHANGJIA_LOGIN_TOKEN }}
 
     steps:
       - name: 检出代码
@@ -80,13 +80,13 @@ jobs:
         uses: actions/deploy-pages@v4
 
       - name: 准备 Node（码上架发布用）
-        if: env.MASHANGJIA_API_TOKEN != ''
+        if: env.MASHANGJIA_LOGIN_TOKEN != ''
         uses: actions/setup-node@v4
         with:
           node-version: "20"
 
       - name: 同步发布到码上架
-        if: env.MASHANGJIA_API_TOKEN != ''
+        if: env.MASHANGJIA_LOGIN_TOKEN != ''
         run: python scripts/publish.py --mode account
 
       - name: 上传站点产物

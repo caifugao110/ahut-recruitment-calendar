@@ -3,6 +3,7 @@
   "mode": "auto",
   "project_dir": "site",
 
-  "_note_anonymous": "匿名模式每次部署都是新项目、新地址，且临时站约 24 小时后预览过期。想让同一个固定地址每天更新，请先 mashangjia login --token <token>（或认领已有站点），再用 account 模式部署。",
-  "_note_account": "account 模式需要本机已登录或提供 MASHANGJIA_API_TOKEN，失败时不会回退匿名。"
+  "_note_anonymous": "匿名模式每次部署都是新项目、新地址，且临时站约 24 小时后预览过期。想让同一个固定地址每天更新，请用 account 模式。",
+  "_note_account": "account 模式凭据三选一：① 环境变量 MASHANGJIA_LOGIN_TOKEN（CI 用这个，脚本会自动先 login 再部署）；② 本机执行过 mashangjia login --token <token>；③ 都没有则只能用匿名。注意 MASHANGJIA_DEPLOY_TOKEN（部署口令）与登录 Token 不是同一种凭据，格式校验不同。",
+  "_note_security": "Token 只走环境变量或 CI Secret，严禁写进本文件或任何入库文件。"
 }

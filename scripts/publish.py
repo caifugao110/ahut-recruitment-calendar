@@ -3,14 +3,21 @@
 publish.py —— 把 site/ 目录发布到码上架（mashangjia）。
 
 说明：
-  - 只是官方 CLI 的一层薄封装，不自己拼 HTTP 请求、不处理任何凭据。
+  - 只是官方 CLI 的一层薄封装，不自己拼 HTTP 请求、不把凭据写进任何项目文件。
   - 全局有 `mashangjia` 就直接用，没有就用 `npx --yes mashangjia`，不改动系统环境。
   - 模式由 config/publish.json 控制：
       "auto"      默认。有账号凭据走账号，没有则匿名
       "anonymous" 强制匿名（临时站，约 24 小时后预览过期，但地址固定不变）
-      "account"   强制账号（需要 mashangjia login，失败不会回退匿名）
-  - 匿名模式下每次部署都是新项目、新地址；想让"同一个地址"每天更新，
-    请先 `mashangjia login --token <token>` 或认领已有站点，再用账号模式部署。
+      "account"   强制账号（需要本机已登录或提供 Token，失败不会回退匿名）
+
+凭据（三选一，优先级从高到低）：
+  1. 环境变量 MASHANGJIA_LOGIN_TOKEN —— CI 用这个。本脚本会先执行
+     `mashangjia login --token <token>` 再部署，Token 只活在进程环境里。
+  2. 本机已登录 —— 本地执行过一次 `mashangjia login --token <token>` 后即可反复使用。
+  3. 都没有 —— 只能用 anonymous 模式。
+
+注意：CLI 另有 MASHANGJIA_DEPLOY_TOKEN（部署口令），与"登录 Token"不是同一种东西，
+      格式校验不同；拿到的如果是 MSJ- 开头的登录 Token，请走上面的第 1 种方式。
 
 用法：
     python scripts/publish.py
@@ -21,6 +28,7 @@ from __future__ import annotations
 
 import argparse
 import json
+import os
 import shutil
 import subprocess
 import sys
@@ -57,6 +65,29 @@ def main() -> int:
         raise SystemExit(f"{project_dir} 下没有 index.html，请先运行 scripts/daily_update.py")
 
     cli = resolve_cli()
+
+    # CI 场景：先用登录 Token 登录，再走账号模式。Token 只在进程环境中，不落盘。
+    login_token = os.environ.get("MASHANGJIA_LOGIN_TOKEN", "").strip()
+    if login_token:
+        print("检测到 MASHANGJIA_LOGIN_TOKEN，先登录 ...")
+        login_cmd = [*cli, "login", "--token", login_token, "--json"]
+        r = subprocess.run(login_cmd, cwd=str(ROOT), capture_output=True,
+                           text=True, encoding="utf-8")
+        ok = False
+        for line in (r.stdout or "").splitlines():
+            if line.strip().startswith("{") and '"command":"login"' in line.replace(" ", ""):
+                try:
+                    ok = bool(json.loads(line).get("ok"))
+                except json.JSONDecodeError:
+                    pass
+        if not ok:
+            print("登录失败，终止发布：", file=sys.stderr)
+            sys.stderr.write((r.stdout or "")[-800:] + (r.stderr or "")[-800:])
+            return 1
+        print("登录成功")
+        if mode == "auto":
+            mode = "account"
+
     cmd = [*cli, "deploy", str(project_dir), "--mode", mode, "--harness", "workbuddy", "--json"]
 
     print(f"$ {' '.join(cmd)}")
