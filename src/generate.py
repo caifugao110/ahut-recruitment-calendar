@@ -44,6 +44,12 @@ header h1{margin:0 0 7px;font-size:24px;letter-spacing:.3px;position:relative;z-
 header .meta{color:#c3cbdd;font-size:13px;position:relative;z-index:1;}
 header .meta code{background:rgba(255,255,255,.13);padding:1px 7px;border-radius:5px;}
 header .meta a{color:#cdd6ea;}
+header .links{display:flex;flex-wrap:wrap;gap:8px;margin-top:14px;position:relative;z-index:1;}
+header .links a{display:inline-flex;align-items:center;gap:6px;font-size:12.5px;
+  background:rgba(255,255,255,.12);border:1px solid rgba(255,255,255,.22);
+  border-radius:999px;padding:5px 13px;color:#e7ecf5;transition:background .15s ease;}
+header .links a:hover{background:rgba(255,255,255,.22);text-decoration:none;}
+header .links svg{width:13px;height:13px;fill:currentColor;flex:0 0 13px;}
 
 .stats{display:grid;grid-template-columns:repeat(4,1fr);gap:12px;margin:16px 0 4px;}
 .stat{background:var(--card);border:1px solid var(--line);border-radius:14px;padding:14px 16px;
@@ -53,7 +59,12 @@ header .meta a{color:#cdd6ea;}
 .stat .l{font-size:12.5px;color:var(--ink2);margin-top:4px;}
 .stat.hl .n{color:var(--red);} .stat.ok .n{color:var(--green);} .stat.ex .n{color:var(--grey);}
 
-.tabshell{display:flex;justify-content:center;margin:22px 0 0;}
+/* 标签栏：向下滚动时吸顶固定在顶部 */
+.tabshell{position:sticky;top:0;z-index:60;display:flex;justify-content:center;
+  margin:22px 0 0;padding:12px 0 10px;
+  background:rgba(245,247,251,.93);
+  -webkit-backdrop-filter:saturate(180%) blur(10px);
+  backdrop-filter:saturate(180%) blur(10px);}
 .tabs{display:inline-flex;gap:4px;background:#e8ecf4;padding:4px;border-radius:13px;
   box-shadow:inset 0 1px 2px rgba(31,36,48,.06);}
 .tab{appearance:none;border:none;background:transparent;cursor:pointer;font:inherit;
@@ -160,6 +171,40 @@ footer a{color:var(--muted);}
   .tab{padding:9px 15px;font-size:13.5px;}
 }
 """
+
+FAVICON_SVG = """<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 64 64" role="img" aria-label="招聘日历">
+  <defs>
+    <linearGradient id="g" x1="0" y1="0" x2="1" y2="1">
+      <stop offset="0" stop-color="#2b3a55"/>
+      <stop offset="1" stop-color="#d4243c"/>
+    </linearGradient>
+  </defs>
+  <rect width="64" height="64" rx="15" fill="url(#g)"/>
+  <rect x="11" y="11" width="6" height="13" rx="3" fill="#ffffff"/>
+  <rect x="47" y="11" width="6" height="13" rx="3" fill="#ffffff"/>
+  <rect x="10" y="17" width="44" height="36" rx="7" fill="#ffffff"/>
+  <path d="M10 24a7 7 0 0 1 7-7h30a7 7 0 0 1 7 7v4H10z" fill="#24304a"/>
+  <path d="M22 38.5l6.5 6.5L44 30" stroke="#d4243c" stroke-width="6" fill="none"
+        stroke-linecap="round" stroke-linejoin="round"/>
+</svg>
+"""
+
+# GitHub 与 Pages 图标（内联 SVG，避免外链依赖）
+ICON_GITHUB = ('<svg viewBox="0 0 16 16" aria-hidden="true"><path d="M8 0C3.58 0 0 3.58 0 8c0 3.54 '
+               '2.29 6.53 5.47 7.59.4.07.55-.17.55-.38 0-.19-.01-.82-.01-1.49-2.01.37-2.53-.49-2.69-.94'
+               '-.09-.23-.48-.94-.82-1.13-.28-.15-.68-.52-.01-.53.63-.01 1.08.58 1.23.82.72 1.21 1.87.87 '
+               '2.33.66.07-.52.28-.87.51-1.07-1.78-.2-3.64-.89-3.64-3.95 0-.87.31-1.59.82-2.15-.08-.2-.36'
+               '-1.02.08-2.12 0 0 .67-.21 2.2.82a7.4 7.4 0 0 1 2-.27c.68 0 1.36.09 2 .27 1.53-1.04 2.2-.82 '
+               '2.2-.82.44 1.1.16 1.92.08 2.12.51.56.82 1.27.82 2.15 0 3.07-1.87 3.75-3.65 3.95.29.25.54.73'
+               '.54 1.48 0 1.07-.01 1.93-.01 2.2 0 .21.15.46.55.38A8.01 8.01 0 0 0 16 8c0-4.42-3.58-8-8-8z"/>'
+               '</svg>')
+ICON_PAGE = ('<svg viewBox="0 0 16 16" aria-hidden="true"><path d="M8 0a8 8 0 1 0 0 16A8 8 0 0 0 8 0zm'
+             '5.9 5h-2.3a12.6 12.6 0 0 0-1-2.4A6.5 6.5 0 0 1 13.9 5zM8 1.6c.6.9 1.1 2 1.4 3.4H6.6C6.9 '
+             '3.6 7.4 2.5 8 1.6zM1.6 9.5c-.1-.5-.1-1 0-1.5h2.7a16 16 0 0 0 0 1.5H1.6zm.5 1.5h2.3c.2.9.6 '
+             '1.7 1 2.4A6.5 6.5 0 0 1 2.1 11zm2.3-4H2.1a6.5 6.5 0 0 1 3.4-2.4c-.5.7-.8 1.5-1 2.4zM8 '
+             '14.4c-.6-.9-1.1-2-1.4-3.4h2.8c-.3 1.4-.8 2.5-1.4 3.4zm1.7-4.9H6.3a14 14 0 0 1 0-1.5h3.4c.1.5.1 '
+             '1 0 1.5zm.4 4.4c.4-.7.8-1.5 1-2.4h2.3a6.5 6.5 0 0 1-3.3 2.4zm1.4-4h2.7c.1-.5.1-1 '
+             '0-1.5h-2.7a16 16 0 0 1 0 1.5z"/></svg>')
 
 JS = """
 (function(){
@@ -426,11 +471,23 @@ class Generator:
         relevant = self._relevant(scored)
         table = self._table(scored)
 
+        links = self.config.get("links", {})
+        repo_url = links.get("repo", "")
+        pages_url = links.get("pages", "")
+        link_html = ""
+        if pages_url:
+            link_html += (f'<a href="{esc(pages_url)}" target="_blank" rel="noopener">'
+                          f'{ICON_PAGE}<span>GitHub 原始页面</span></a>')
+        if repo_url:
+            link_html += (f'<a href="{esc(repo_url)}" target="_blank" rel="noopener">'
+                          f'{ICON_GITHUB}<span>源代码仓库</span></a>')
+
         return (
             '<!DOCTYPE html><html lang="zh-CN" class="nojs">'
             '<head><meta charset="utf-8">'
             '<meta name="viewport" content="width=device-width,initial-scale=1">'
-            f"<title>{esc(self.config['site']['name'])} · {esc(rng['start'][:4])}年9-12月</title>"
+            f"<title>{esc(self.config['site']['name'])}</title>"
+            f'<link rel="icon" type="image/svg+xml" href="favicon.svg">'
             '<meta name="description" content="安徽工业大学校园招聘会日历：每日自动抓取，'
             '含招聘会总览与按专业、学历、城市画像筛选的个性化匹配。">'
             f"<style>{CSS}</style></head><body><div class=\"wrap\">"
@@ -438,7 +495,8 @@ class Generator:
             f"<div class=\"meta\">统计区间 <code>{esc(rng['start'])} ~ {esc(rng['end'])}</code>　·　"
             f"数据更新 <code>{esc(now)}</code>　·　每日 <code>02:00</code> 自动更新<br>"
             "来源：<a href=\"" + esc(self.config["site"]["calendar_url"]) +
-            "\" target=\"_blank\" rel=\"noopener\">ahut.ahbys.com 招聘日历</a></div></header>"
+            "\" target=\"_blank\" rel=\"noopener\">ahut.ahbys.com 招聘日历</a></div>"
+            f'<div class="links">{link_html}</div></header>'
             "<div class=\"stats\">"
             f"<div class=\"stat hl\"><div class=\"n\">{total}<small>场</small></div>"
             "<div class=\"l\">区间内总场次</div></div>"
@@ -459,10 +517,14 @@ class Generator:
             f'<div class="panel">{relevant}'
             f'<h2 class="month">匹配明细<span>共 {len(scored)} 场</span></h2>{table}</div>'
             "<footer>"
-            "本站为开源项目，每日 02:00 自动从学校就业平台抓取并重新发布；"
+            "本站为 MIT 开源项目，每日 02:00 自动从学校就业平台抓取并重新发布；"
             "已过期的场次照常收录，切换筛选即可查看。<br>"
-            "招聘信息以学校就业网实时发布为准，如有出入请以前者为准。"
-            f"<br>生成时间 {esc(now)}　·　今天是 {esc(today.isoformat())}"
+            "招聘信息以学校就业网实时发布为准，如有出入请以前者为准。<br>"
+            + (f'<a href="{esc(pages_url)}" target="_blank" rel="noopener">GitHub 原始页面</a>'
+               "　·　" if pages_url else "")
+            + (f'<a href="{esc(repo_url)}" target="_blank" rel="noopener">源代码仓库</a>　·　'
+               if repo_url else "")
+            + f"生成时间 {esc(now)}　·　今天是 {esc(today.isoformat())}"
             "</footer></div>"
             f"<script>{JS}</script></body></html>"
         )
@@ -472,6 +534,8 @@ class Generator:
         html_text = self.render(fairs, scored, months, today)
         out = self.site_dir / self.config["output"]["index_name"]
         out.write_text(html_text, encoding="utf-8")
+        # 站点图标（SVG，随站点一起发布，避免依赖外部图床）
+        (self.site_dir / "favicon.svg").write_text(FAVICON_SVG, encoding="utf-8")
         (self.site_dir / "data.json").write_text(
             json.dumps({"updated_at": dt.datetime.now().isoformat(timespec="seconds"),
                         "total": len(fairs), "fairs": scored}, ensure_ascii=False),

@@ -6,6 +6,10 @@
     "api_path": "/API/Web/Recruit.ashx",
     "detail_url": "https://ahut.ahbys.com/Recruit.html?id={id}"
   },
+  "links": {
+    "repo": "https://github.com/caifugao110/ahut-recruitment-calendar",
+    "pages": "https://caifugao110.github.io/ahut-recruitment-calendar/"
+  },
   "range": {
     "start": "2026-09-01",
     "end": "2026-12-31"
