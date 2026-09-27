@@ -17,7 +17,7 @@ publish.py —— 把 site/ 目录发布到码上架（mashangjia）。
   3. 都没有 —— 只能用 anonymous 模式。
 
 注意：CLI 另有 MASHANGJIA_DEPLOY_TOKEN（部署口令），与"登录 Token"不是同一种东西，
-      格式校验不同；拿到的如果是 MSJ- 开头的登录 Token，请走上面的第 1 种方式。
+      格式校验不同；控制台「API Token」页面生成的是登录 Token，请走上面的第 1 种方式。
 
 用法：
     python scripts/publish.py
