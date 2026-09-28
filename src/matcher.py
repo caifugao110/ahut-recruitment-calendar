@@ -4,6 +4,13 @@ matcher.py — 把招聘简章与"个人画像"（专业 + 意向城市）做匹
 设计目标：不写死任何公司名，全部由 config/config.json 的 profile 段驱动。
 换一个人、换一个专业或城市，只改配置即可复用。
 
+城市匹配的范围（重要）：
+    只认"工作地点 / 面试地址 / 公司地址 / 联系方式"这类要素里出现的城市，
+    而不是简章正文里随便提一句就算。否则像"与南京大学产学研合作""2021年于南京成立"
+    "社保可缴纳城市有…南京…"都会把单位判成意向城市，产生大量误判。
+    实现见 city_context()：先从简章里抽出"说明人在哪儿上班/在哪儿面试/怎么联系"的句子，
+    再在这些句子里找城市；页面上的"城市依据"展示的也是这些句子。
+
 打分（取最高档位，不做关键词累加）：
     score = 专业分 + 城市分 * city_weight_ratio
     专业分 = 命中任一 strong 关键词 ? major_strong : (命中 weak ? major_weak : 0)
@@ -28,6 +35,30 @@ from src.timeutil import cn_today
 
 SENTENCE_SPLIT = re.compile(r"[\n；;。]| \| ")
 
+# 城市上下文的判定关键词（config.json -> profile.cities 里可覆盖）
+# location：说明"人在哪儿上班 / 到哪儿面试"的字段
+DEFAULT_LOCATION_FIELDS = [
+    "地址", "地点", "工作地", "上班地", "办公地", "面试地", "笔试地", "报到地", "入职地",
+    "宣讲地", "招聘地", "厂址", "厂区", "基地", "研发中心", "项目部", "驻场",
+    "所在城市", "工作城市", "意向城市", "需求城市", "常驻地",
+    "位于", "坐落于", "坐落在", "总部", "分公司", "子公司",
+]
+# contact：联系方式类字段（联系人/电话/邮箱附近写的城市算数）
+DEFAULT_CONTACT_FIELDS = [
+    "联系方式", "联系人", "联系电话", "电话", "手机", "座机", "直线", "传真",
+    "邮箱", "E-mail", "e-mail", "Email", "微信", "QQ", "邮编",
+    "投递", "招聘热线", "咨询电话",
+]
+# exclude：这些词所在的句子不可能是工作地点，命中即整句作废
+DEFAULT_EXCLUDE_FIELDS = [
+    "社保", "公积金", "五险", "一金", "缴纳", "保险", "福利",
+    "生源", "户籍", "校友", "产学研", "合作院校", "生源所在地",
+    "销售区域", "业务范围", "客户", "出差", "外派",
+]
+
+_CITY_SEP_RE = re.compile(r"[/、,，;；|]")
+_HAS_ALNUM_RE = re.compile(r"[0-9A-Za-z]")
+
 
 def _norm(text: str) -> str:
     return (text or "").replace("\u00a0", " ").strip()
@@ -35,6 +66,39 @@ def _norm(text: str) -> str:
 
 def _count(text: str, keyword: str) -> int:
     return text.count(keyword) if keyword else 0
+
+
+def _any_of(keywords: List[str]) -> Optional[re.Pattern]:
+    """把关键词表编译成"命中任意一个"的正则，空表返回 None。"""
+    words = [re.escape(k) for k in keywords if k]
+    return re.compile("|".join(words)) if words else None
+
+
+def _cfg_keywords(value: Any, default: List[str]) -> List[str]:
+    """
+    读配置里的关键词表。配置里为了写注释用的是 {"_comment": ..., "keywords": [...]}，
+    这里两种写法都兼容：字典取 keywords 字段，列表直接用，都没有则回落到默认值。
+    """
+    if isinstance(value, dict):
+        words = value.get("keywords")
+        return list(words) if words else list(default)
+    if isinstance(value, (list, tuple)) and value:
+        return [str(x) for x in value]
+    return list(default)
+
+
+def _looks_like_city_list(seg: str) -> bool:
+    """
+    判断一个片段是不是"纯城市列表"——例如岗位表里的「工作地点」列：
+        "杭州/苏州/南京/成都"、"温州/南京/嘉兴"、"深圳、杭州、南京"
+    这类行没有字段名，但内容全是地名，本身就是工作地信号。
+    """
+    parts = [p.strip() for p in _CITY_SEP_RE.split(seg) if p.strip()]
+    if len(parts) < 2 or len(seg) > 80:
+        return False
+    if any(_HAS_ALNUM_RE.search(p) for p in parts):
+        return False
+    return all(2 <= len(p) <= 8 for p in parts)
 
 
 class Matcher:
@@ -56,6 +120,11 @@ class Matcher:
         belt = cities.get("belt", {}) or {}
         self.city_belt: Dict[str, List[str]] = {k: list(v) for k, v in belt.items()}
         self.city_belt_all: List[str] = sorted({c for v in self.city_belt.values() for c in v})
+
+        # 城市只在"工作地 / 地址 / 联系方式"类句子里才算命中
+        self._loc_re = _any_of(_cfg_keywords(cities.get("location_fields"), DEFAULT_LOCATION_FIELDS))
+        self._contact_re = _any_of(_cfg_keywords(cities.get("contact_fields"), DEFAULT_CONTACT_FIELDS))
+        self._excl_re = _any_of(_cfg_keywords(cities.get("exclude_fields"), DEFAULT_EXCLUDE_FIELDS))
 
         w = profile.get("weights", {})
         self.w_major_strong = float(w.get("major_strong", 3.0))
@@ -85,8 +154,34 @@ class Matcher:
             score = 0.0
         return score, strong + weak
 
+    def city_context(self, text: str) -> str:
+        """
+        从简章里挑出真正说明"工作地点 / 面试地址 / 联系方式"的句子，拼成一段小文本。
+
+        城市的匹配与证据都只在这段文本里做，避免正文中"和南京大学合作""于南京成立"
+        "社保可缴纳南京"这类顺带提及被误当成工作地。
+        """
+        if not text:
+            return ""
+        kept: List[str] = []
+        for seg in SENTENCE_SPLIT.split(text):
+            seg = _norm(seg)
+            if len(seg) < 4:
+                continue
+            # 福利/社保/生源这类句子先整句作废
+            if self._excl_re and self._excl_re.search(seg):
+                continue
+            hit_loc = bool(self._loc_re and self._loc_re.search(seg))
+            hit_contact = bool(self._contact_re and self._contact_re.search(seg))
+            if hit_loc or hit_contact or _looks_like_city_list(seg):
+                kept.append(seg)
+        return "\n".join(kept)
+
     def score_city(self, text: str) -> tuple:
-        """返回 (分数, 命中的城市列表, 命中的周边城市列表)。取最高档位，不累加。"""
+        """返回 (分数, 命中的城市列表, 命中的周边城市列表)。取最高档位，不累加。
+
+        传入的应当只是"城市上下文"（见 city_context），不是整篇简章。
+        """
         hits_p = [c for c in self.city_primary if _count(text, c)]
         hits_b = [c for c in self.city_belt_all if _count(text, c)]
         if hits_p:
@@ -133,8 +228,11 @@ class Matcher:
         # 简章缺失时，退化为用单位名+场次名做弱判断，避免漏项
         searchable = text if text else _norm(fair.get("theme", ""))
 
+        # 城市只在"工作地 / 地址 / 联系方式"这些要素里找，正文顺带提及不算
+        city_text = self.city_context(text) if text else ""
+
         m_score, m_hits = self.score_major(searchable)
-        c_score, c_hits, c_belt = self.score_city(searchable)
+        c_score, c_hits, c_belt = self.score_city(city_text)
         e_score, e_hits = self.score_edu(searchable)
         total = m_score + c_score * self.w_city_ratio + e_score
 
@@ -150,7 +248,8 @@ class Matcher:
         # 只对"专业和城市各沾一点"的情况给提示，避免一刀切
         note = ""
         if m_hits and not (c_hits or c_belt):
-            note = f"专业对口（{m_hits[0]}），但简章未出现意向城市"
+            note = (f"专业对口（{m_hits[0]}），但简章的工作地/联系方式中未出现意向城市"
+                    if text else f"专业对口（{m_hits[0]}），但缺少简章，无法判断工作地")
         elif (c_hits or c_belt) and not m_hits:
             note = f"城市有戏（{(c_hits or c_belt)[0]}），但简章未列出材料类专业"
         elif not m_hits and not (c_hits or c_belt):
@@ -169,7 +268,7 @@ class Matcher:
             "city_hits": c_hits,
             "city_belt_hits": c_belt,
             "major_evidence": self.evidence(text, m_hits),
-            "city_evidence": self.evidence(text, c_hits + c_belt, limit=2),
+            "city_evidence": self.evidence(city_text, c_hits + c_belt, limit=2),
             "note": note,
         }
 

@@ -33,6 +33,9 @@ CSS = """
   --tab-h:62px;              /* 标签栏实际高度，由页面 JS 实测回写，供筛选条吸顶对齐 */
 }
 *{box-sizing:border-box;}
+/* overflow-x:clip：万一仍有元素超宽，页面也不允许横向拖动（真机上横向可拖会让
+   吸顶/居中的基准视口偏掉）。clip 不产生滚动容器，不影响 sticky；老内核不认识则忽略 */
+html,body{overflow-x:clip;}
 body{margin:0;padding:0 14px 60px;background:var(--bg);color:var(--ink);
   font-family:"PingFang SC","Microsoft YaHei","Hiragino Sans GB",-apple-system,"Segoe UI",sans-serif;
   -webkit-font-smoothing:antialiased;line-height:1.6;}
@@ -67,15 +70,18 @@ header .meta a{color:#cdd6ea;}
 .stat:hover .l .go{opacity:1;}
 .stat.hl .n{color:var(--red);} .stat.ok .n{color:var(--green);} .stat.ex .n{color:var(--grey);}
 
-/* 标签栏吸顶：不依赖 position:sticky —— 微信 X5 / 夸克等移动端内核对它支持不稳
-   （实测「电脑固定、手机不固定」），统一由 JS 用「占位元素 + position:fixed」驱动，
-   所有浏览器行为一致。display 用 block + text-align 居中，避开老内核 sticky+flex 的坑 */
-.tabshell{display:block;text-align:center;margin:22px 0 0;padding:12px 0 10px;background:var(--bg);}
+/* 标签栏吸顶：CSS sticky 为基线（现代微信 X5 / iOS Safari 都支持；早期「手机不吸顶」
+   的元凶是 backdrop-filter 毛玻璃，已禁用）。老内核不支持 / 吸不住时，由 JS 检测
+   「该吸没吸」后切 position:fixed 兜底（见下方 JS），两种方案不会同时生效。
+   居中用 flex + text-align 双保险：flex 失效时退回 inline 居中，规避真机内核差异 */
+.tabshell{position:-webkit-sticky;position:sticky;top:0;z-index:60;
+  display:flex;justify-content:center;align-items:center;text-align:center;
+  margin:22px 0 0;padding:12px 0 10px;background:var(--bg);}
 .tabshell.js-stuck{position:fixed;left:0;right:0;top:0;z-index:60;margin:0;}
 /* JS 吸顶的等高占位元素，避免元素切 fixed 后页面跳动 */
 .sticky-ph{height:0;overflow:hidden;}
 .tabs{display:inline-flex;gap:4px;background:#e8ecf4;padding:4px;border-radius:13px;
-  box-shadow:inset 0 1px 2px rgba(31,36,48,.06);}
+  box-shadow:inset 0 1px 2px rgba(31,36,48,.06);flex:0 0 auto;max-width:100%;}
 .tab{appearance:none;border:none;background:transparent;cursor:pointer;font:inherit;
   font-size:14.5px;font-weight:600;color:#5b6478;padding:9px 24px;border-radius:10px;
   display:flex;align-items:center;gap:8px;transition:color .16s ease,background .16s ease;}
@@ -89,10 +95,11 @@ header .meta a{color:#cdd6ea;}
 .panel.active{display:block;}
 .nojs .panel{display:block !important;}
 
-/* 筛选条跟着标签栏一起吸顶：往下翻场次时也能随时改筛选（同样由 JS 驱动，理由见标签栏）。
-   吸顶时 top/left/width 由 JS 按占位元素实测写入，z-index 低于标签栏 */
+/* 筛选条跟着标签栏一起吸顶：往下翻场次时也能随时改筛选。同样是 sticky 基线 + JS 兜底，
+   top 用标签栏实测高度（--tab-h），吸顶时 left/width 由 JS 按占位元素实测写入 */
 .bar{display:flex;gap:7px;flex-wrap:wrap;align-items:center;margin:0 0 14px;padding:9px 0 11px;
-  border-bottom:1px solid var(--line);scroll-margin-top:78px;background:var(--bg);}
+  border-bottom:1px solid var(--line);scroll-margin-top:78px;background:var(--bg);
+  position:-webkit-sticky;position:sticky;top:var(--tab-h);z-index:55;}
 .bar.js-stuck{position:fixed;z-index:55;margin:0;}
 .fbtn{appearance:none;border:1px solid var(--line);background:var(--card);cursor:pointer;
   font:inherit;font-size:12.5px;color:var(--ink2);padding:5px 14px;border-radius:999px;
@@ -255,6 +262,9 @@ a.brief:hover svg{transform:translateX(2px);}
 
 table{width:100%;border-collapse:collapse;background:var(--card);border:1px solid var(--line);
   border-radius:12px;overflow:hidden;font-size:12.5px;}
+/* 匹配明细表横向滚动：表头 nowrap 超出屏宽时在容器内滚，不撑宽页面
+   （页面一旦横向溢出，真机的 fixed/sticky/居中基准都会跟着歪） */
+.tblwrap{overflow-x:auto;-webkit-overflow-scrolling:touch;}
 thead th{background:#f0f2f7;color:var(--ink2);font-weight:600;text-align:left;padding:9px 11px;white-space:nowrap;}
 tbody td{padding:8px 11px;border-top:1px solid var(--line);vertical-align:middle;}
 tbody tr:nth-child(even){background:#fafbfd;}
@@ -323,10 +333,13 @@ JS = """
   var root=document.documentElement;
   root.classList.remove('nojs');
 
-  // ---- 吸顶：统一由 JS「占位元素 + position:fixed」驱动，不依赖 position:sticky ----
-  // 微信内置浏览器（X5）/ 夸克等移动端内核对 sticky 支持不稳（反馈过「电脑固定、手机不固定」），
-  // JS 方案在所有浏览器行为一致。原理：在元素原位置插入等高占位，元素滚到视口边缘时切 fixed，
-  // 滚回时还原；占位元素保持文档流高度，页面不跳动。
+  // ---- 吸顶：CSS sticky 为基线，JS 只做「sticky 失效兜底」 ----
+  // 历史教训：早期版本的毛玻璃(backdrop-filter)会让微信 X5 / iOS 的 sticky 整个失效，
+  // 后来全部改成 JS「占位元素 + fixed」驱动，但纯 JS 依赖 scroll 事件——真机上合成器
+  // 滚动/事件节流时同样会出现「往下滚标签栏没固定」。现在的策略：
+  //   1) CSS sticky 正常（绝大多数现代内核）→ JS 完全不介入，滚动中由合成器钉住；
+  //   2) 滚过阈值后元素仍没被钉住（top 越过了钳制点）→ 判定 sticky 失效，
+  //      插入等高占位并切 position:fixed，滚回原位自动还原。
   var stickies=[];
   function pageY(){ return window.pageYOffset||document.documentElement.scrollTop||0; }
   function makeSticky(el, topFn, fullWidth){
@@ -363,12 +376,17 @@ JS = """
         if(stuck) unstick();
         return;
       }
-      var threshold=phDocTop()-topFn();
+      var topVal=topFn();
+      var threshold=phDocTop()-topVal;
       var y=pageY();
-      if(!stuck){ if(y>threshold) stick(); }
-      else if(y<threshold) unstick();
+      if(!stuck){
+        // sticky 正常时元素会精准钉在 topVal；滚过阈值却还在随内容上移，
+        // 说明内核没吸住（top < topVal-钳制容差）→ 兜底接管
+        if(y>threshold+4 && el.getBoundingClientRect().top<topVal-4) stick();
+      }else if(y<threshold) unstick();
     }
     window.addEventListener('scroll', check, {passive:true});
+    window.addEventListener('touchmove', check, {passive:true});
     window.addEventListener('resize', function(){ if(stuck) layout(); check(); });
     var inst={check:check, relayout:function(){ if(stuck) layout(); }};
     stickies.push(inst);
@@ -836,7 +854,9 @@ class Generator:
         parts.append(
             '<div class="note">匹配画像：<span>'
             + '<span class="sep">·</span>'.join(bits)
-            + "</span><br>打分与关键词均来自 <code>config/config.json → profile</code>，"
+            + "</span><br>城市只在简章的<b>工作地 / 面试地址 / 联系方式</b>里认定，"
+            "正文顺带提及（合作院校、社保缴纳地）不算。"
+            "打分与关键词均来自 <code>config/config.json → profile</code>，"
             "改动配置即可适配其他人。已过期的匹配项同样保留，仅作灰显。</div>"
         )
 
@@ -920,9 +940,13 @@ class Generator:
                 "</tr>"
             )
         return (
+            # 外层滚动容器：8 个 nowrap 表头在手机上必然超过屏宽，
+            # 不包一层会把整个页面布局视口撑宽，吸顶元素/居中全部跟着偏移
+            '<div class="tblwrap">'
             "<table><thead><tr><th>日期</th><th>单位</th><th>时间</th><th>地点</th>"
             "<th>命中专业</th><th>命中城市</th><th>分数</th><th>状态</th></tr></thead>"
             f"<tbody>{''.join(rows)}</tbody></table>"
+            "</div>"
         )
 
     def render(self, fairs: List[Dict[str, Any]], scored: List[Dict[str, Any]],
