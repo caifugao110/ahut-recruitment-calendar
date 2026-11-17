@@ -1837,7 +1837,7 @@
     "date": "2026-10-24",
     "weekday": "周六",
     "description": "",
-    "detail_fetched_at": "2026-11-17T02:01:28+08:00"
+    "detail_fetched_at": "2026-11-18T02:02:16+08:00"
   },
   {
     "id": "110234",
@@ -1857,7 +1857,7 @@
     "date": "2026-11-19",
     "weekday": "周四",
     "description": "",
-    "detail_fetched_at": "2026-11-17T02:01:52+08:00"
+    "detail_fetched_at": "2026-11-18T02:03:05+08:00"
   },
   {
     "id": "110235",
@@ -1867,6 +1867,16 @@
     "date": "2026-11-26",
     "weekday": "周四",
     "description": "",
-    "detail_fetched_at": "2026-11-17T02:01:52+08:00"
+    "detail_fetched_at": "2026-11-18T02:03:17+08:00"
+  },
+  {
+    "id": "22897",
+    "theme": "安徽江汽物流有限公司2026安徽工业大学专场宣讲会",
+    "venue": "宣讲一厅",
+    "time": "14:30-16:00",
+    "date": "2026-11-24",
+    "weekday": "周二",
+    "description": "",
+    "detail_fetched_at": "2026-11-18T02:03:16+08:00"
   }
 ]
